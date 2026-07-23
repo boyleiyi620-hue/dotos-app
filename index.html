@@ -1396,6 +1396,7 @@
           showToast('Çıkış hatası: ' + error.message, 'fa-exclamation-circle');
         });
     } else {
+      localStorage.removeItem('dostos_last_user');
       currentUser = null;
       userData = null;
       friendsData = {};
@@ -1410,7 +1411,7 @@
     }
   }
 
-  // Auth state listener (sadece Firebase yapılandırıldıysa)
+  // Auth state listener
   const isFirebaseConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY";
   if (isFirebaseConfigured && auth) {
     auth.onAuthStateChanged((user) => {
@@ -1422,8 +1423,21 @@
       }
     });
   } else {
-    // Firebase yapılandırılmadıysa her zaman giriş ekranını göster
-    showLoginModal();
+    // LocalStorage oturum kontrolü
+    const lastUser = localStorage.getItem('dostos_last_user');
+    if (lastUser) {
+      const users = JSON.parse(localStorage.getItem('dostos_users') || '{}');
+      const user = users[lastUser];
+      if (user) {
+        currentUser = { uid: lastUser, displayName: user.name };
+        userData = user;
+        loadUserData();
+      } else {
+        showLoginModal();
+      }
+    } else {
+      showLoginModal();
+    }
   }
 
   // ================================================================
@@ -3696,9 +3710,12 @@
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredInstallPrompt = e;
-    // Ana ekrana ekle butonu göster
-    const installBanner = document.getElementById('installBanner');
-    if (installBanner) installBanner.style.display = 'flex';
+    // Ana ekrana ekle butonu göster (eğer uygulama modunda değilse)
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    if (!isStandalone) {
+      const installBanner = document.getElementById('installBanner');
+      if (installBanner) installBanner.style.display = 'flex';
+    }
   });
 
   window.addEventListener('appinstalled', () => {

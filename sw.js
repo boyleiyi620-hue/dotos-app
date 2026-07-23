@@ -1,9 +1,9 @@
 // DostOS Service Worker v1.0
 const CACHE_NAME = 'dostos-v1';
 const STATIC_ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.json',
+  './',
+  './index.html',
+  './manifest.json',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
   'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap'
 ];
@@ -13,9 +13,9 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll([
-        '/',
-        '/index.html',
-        '/manifest.json'
+        './',
+        './index.html',
+        './manifest.json'
       ]);
     }).then(() => self.skipWaiting())
   );
@@ -58,7 +58,7 @@ self.addEventListener('fetch', (event) => {
           if (cached) return cached;
           // Return index.html for navigation requests
           if (event.request.mode === 'navigate') {
-            return caches.match('/index.html');
+            return caches.match('./index.html');
           }
         });
       })
