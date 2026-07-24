@@ -1,0 +1,49 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "users": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+
+    "friendCodes": {
+      "$code": {
+        ".read": "auth != null",
+        ".write": "auth != null && (!data.exists() ? newData.child('uid').val() === auth.uid : data.child('uid').val() === auth.uid)",
+        ".validate": "!newData.exists() || (newData.hasChildren(['uid', 'displayName', 'code']) && newData.child('uid').val() === auth.uid && newData.child('code').val() === $code && newData.child('displayName').isString() && newData.child('displayName').val().length <= 80)"
+      }
+    },
+
+    "friendRequests": {
+      "$toUid": {
+        ".read": "auth != null && auth.uid === $toUid",
+        "$fromUid": {
+          ".read": "auth != null && (auth.uid === $toUid || auth.uid === $fromUid)",
+          ".write": "auth != null && (auth.uid === $fromUid || auth.uid === $toUid)",
+          ".validate": "!newData.exists() || (newData.hasChildren(['fromUid', 'fromName', 'fromCode', 'status', 'sentAt']) && newData.child('fromUid').val() === $fromUid && newData.child('status').isString() && newData.child('fromName').isString() && newData.child('fromName').val().length <= 80)"
+        }
+      }
+    },
+
+    "friendships": {
+      "$ownerUid": {
+        ".read": "auth != null && auth.uid === $ownerUid",
+        "$friendUid": {
+          ".write": "auth != null && (auth.uid === $ownerUid || auth.uid === $friendUid)",
+          ".validate": "!newData.exists() || (newData.hasChildren(['uid', 'displayName', 'friendCode', 'addedAt']) && newData.child('uid').val() === $friendUid && newData.child('displayName').isString() && newData.child('displayName').val().length <= 80 && newData.child('friendCode').isString() && newData.child('addedAt').isNumber())"
+        }
+      }
+    },
+
+    "data": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || root.child('friendships').child(auth.uid).child($uid).exists())",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    }
+  }
+}
