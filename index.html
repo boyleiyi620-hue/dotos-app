@@ -1122,8 +1122,9 @@
   };
 
   // Firebase yalnızca gerçek proje değerleri girildiğinde başlatılır.
+  // Authentication KULLANILMIYOR — sadece Realtime Database kullanılıyor.
   const firebaseConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY";
-  let app, auth, db;
+  let app, db;
   let currentUser = null;
   let userData = null;
   let friendsData = {};
@@ -1139,7 +1140,7 @@
   if (firebaseConfigured) {
     try {
       app = firebase.initializeApp(firebaseConfig);
-      auth = firebase.auth();
+      // Auth kullanılmıyor — sadece database
       db = firebase.database();
     } catch (e) {
       console.error('Firebase başlatılamadı:', e);
@@ -1247,7 +1248,6 @@
   }
 
   function handleLogin() {
-    const isFirebaseConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY";
     const displayName = (document.getElementById('loginDisplayName')?.value || '').trim();
     const password = document.getElementById('loginPassword').value;
 
@@ -1256,52 +1256,29 @@
       return;
     }
 
-    if (isFirebaseConfigured && auth) {
-      // Firebase: Görünen adı sahte e-postaya çevirerek Anonymous Auth yerine
-      // Custom Token yerine basit e-posta trick kullanıyoruz.
-      // Kullanıcı adı -> slug@dostos.app formatında e-posta oluşturulur.
-      const slug = displayName.toLowerCase().replace(/[^a-z0-9]/g, '_').substring(0, 30);
-      const fakeEmail = slug + '@dostos.app';
-      auth.signInWithEmailAndPassword(fakeEmail, password)
-        .then(() => {
-          showToast('Giriş başarılı!', 'fa-check-circle');
-          closeModal();
-        })
-        .catch((error) => {
-          if (error.code === 'auth/user-not-found') {
-            showToast('Bu isimle kayıtlı hesap bulunamadı. Lütfen önce kayıt ol.', 'fa-exclamation-circle');
-          } else if (error.code === 'auth/wrong-password') {
-            showToast('Şifre hatalı', 'fa-exclamation-circle');
-          } else {
-            showToast('Giriş hatası: ' + error.message, 'fa-exclamation-circle');
-          }
-        });
-    } else {
-      // LocalStorage ile giriş
-      const users = JSON.parse(localStorage.getItem('dostos_users') || '{}');
-      const slug = displayName.toLowerCase().replace(/[^a-z0-9]/g, '_').substring(0, 30);
-      const user = users[slug];
+    // Tamamen LocalStorage ile giriş (Authentication yok)
+    const users = JSON.parse(localStorage.getItem('dostos_users') || '{}');
+    const slug = displayName.toLowerCase().replace(/[^a-z0-9]/g, '_').substring(0, 30);
+    const user = users[slug];
 
-      if (!user) {
-        showToast('Bu isimle kayıtlı hesap bulunamadı', 'fa-exclamation-circle');
-        return;
-      }
-      if (user.password !== password) {
-        showToast('Şifre hatalı', 'fa-exclamation-circle');
-        return;
-      }
-
-      currentUser = { uid: slug, displayName: user.name };
-      userData = user;
-      localStorage.setItem('dostos_last_user', slug);
-      loadUserData();
-      showToast('Giriş başarılı!', 'fa-check-circle');
-      closeModal();
+    if (!user) {
+      showToast('Bu isimle kayıtlı hesap bulunamadı. Lütfen önce kayıt ol.', 'fa-exclamation-circle');
+      return;
     }
+    if (user.password !== password) {
+      showToast('Şifre hatalı', 'fa-exclamation-circle');
+      return;
+    }
+
+    currentUser = { uid: slug, displayName: user.name };
+    userData = user;
+    localStorage.setItem('dostos_last_user', slug);
+    loadUserData();
+    showToast('Giriş başarılı! Hoş geldin ' + user.name, 'fa-check-circle');
+    closeModal();
   }
 
   function handleRegister() {
-    const isFirebaseConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY";
     const name = (document.getElementById('registerName')?.value || '').trim();
     const password = document.getElementById('registerPassword').value;
 
@@ -1314,122 +1291,64 @@
       return;
     }
 
-    // Görünen adı benzersiz slug'a çevir (hem Firebase hem LocalStorage için)
+    // Görünen adı benzersiz slug'a çevir
     const slug = name.toLowerCase().replace(/[^a-z0-9]/g, '_').substring(0, 30);
 
-    if (isFirebaseConfigured && auth) {
-      const fakeEmail = slug + '@dostos.app';
-      const friendCode = makeFriendCode();
-      auth.createUserWithEmailAndPassword(fakeEmail, password)
-        .then((userCredential) => {
-          const user = userCredential.user;
-          const updates = {};
-          updates['users/' + user.uid] = {
-            name: name,
-            slug: slug,
-            createdAt: new Date().toISOString(),
-            friendCode: friendCode
-          };
-          updates['friendCodes/' + friendCode] = {
-            uid: user.uid,
-            displayName: name,
-            code: friendCode
-          };
-          // İsim -> UID dizini: arkadaş isteyi kod yerine isimle de gönderilebilsin
-          updates['slugs/' + slug] = user.uid;
-          return db.ref().update(updates);
-        })
-        .then(() => {
-          showToast('Kayıt başarılı! Hoş geldin ' + name + ' 🎉', 'fa-check-circle');
-          closeModal();
-        })
-        .catch((error) => {
-          if (error.code === 'auth/email-already-in-use') {
-            showToast('Bu isim zaten alınmış, farklı bir ad dene', 'fa-exclamation-circle');
-          } else {
-            showToast('Kayıt hatası: ' + error.message, 'fa-exclamation-circle');
-          }
-        });
-    } else {
-      // LocalStorage ile kayıt
-      const users = JSON.parse(localStorage.getItem('dostos_users') || '{}');
-      if (users[slug]) {
-        showToast('Bu isim zaten alınmış, farklı bir ad dene', 'fa-exclamation-circle');
-        return;
-      }
-      users[slug] = {
-        name: name,
-        slug: slug,
-        password: password,
-        createdAt: new Date().toISOString(),
-        friends: []
-      };
-      localStorage.setItem('dostos_users', JSON.stringify(users));
-      currentUser = { uid: slug, displayName: name };
-      userData = users[slug];
-      data = defaultData();
-      saveData();
-      showToast('Kayıt başarılı! Hoş geldin ' + name + ' 🎉', 'fa-check-circle');
-      closeModal();
-      renderAll();
+    // LocalStorage'a kayıt
+    const users = JSON.parse(localStorage.getItem('dostos_users') || '{}');
+    if (users[slug]) {
+      showToast('Bu isim zaten alınmış, farklı bir ad dene', 'fa-exclamation-circle');
+      return;
     }
+    const friendCode = makeFriendCode();
+    users[slug] = {
+      name: name,
+      slug: slug,
+      password: password,
+      friendCode: friendCode,
+      createdAt: new Date().toISOString(),
+      friends: []
+    };
+    localStorage.setItem('dostos_users', JSON.stringify(users));
+
+    currentUser = { uid: slug, displayName: name };
+    userData = users[slug];
+    localStorage.setItem('dostos_last_user', slug);
+    data = defaultData();
+    saveData();
+
+    // Firebase varsa kullanıcı verisini ve slug dizinini de yaz
+    if (firebaseConfigured && db) {
+      const updates = {};
+      updates['users/' + slug] = { name, slug, friendCode, createdAt: new Date().toISOString() };
+      updates['slugs/' + slug] = slug;
+      updates['friendCodes/' + friendCode] = { uid: slug, displayName: name, code: friendCode };
+      db.ref().update(updates).catch(e => console.warn('Firebase kayıt sync hatası:', e));
+    }
+
+    showToast('Kayıt başarılı! Hoş geldin ' + name + ' 🎉', 'fa-check-circle');
+    closeModal();
+    renderAll();
   }
 
   function handleLogout() {
-    const isFirebaseConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY";
-
-    if (isFirebaseConfigured && auth) {
-      auth.signOut()
-        .then(() => {
-          showToast('Çıkış yapıldı', 'fa-sign-out-alt');
-          stopFriendListeners();
-          currentUser = null;
-          userData = null;
-          friendsData = {};
-          friendships = {};
-          friendRequests = {};
-          data = defaultData();
-          
-          const userDisplay = document.getElementById('userDisplay');
-          if (userDisplay) userDisplay.style.display = 'none';
-          
-          renderAll();
-          showLoginModal();
-        })
-        .catch((error) => {
-          showToast('Çıkış hatası: ' + error.message, 'fa-exclamation-circle');
-        });
-    } else {
-      localStorage.removeItem('dostos_last_user');
-      stopFriendListeners();
-      currentUser = null;
-      userData = null;
-      friendsData = {};
-      friendships = {};
-      data = defaultData();
-      
-      const userDisplay = document.getElementById('userDisplay');
-      if (userDisplay) userDisplay.style.display = 'none';
-      
-      renderAll();
-      showLoginModal();
-      showToast('Çıkış yapıldı', 'fa-sign-out-alt');
-    }
+    localStorage.removeItem('dostos_last_user');
+    stopFriendListeners();
+    currentUser = null;
+    userData = null;
+    friendsData = {};
+    friendships = {};
+    friendRequests = {};
+    data = defaultData();
+    const userDisplay = document.getElementById('userDisplay');
+    if (userDisplay) userDisplay.style.display = 'none';
+    renderAll();
+    showLoginModal();
+    showToast('Çıkış yapıldı', 'fa-sign-out-alt');
   }
 
-  // Auth state listener
-  const isFirebaseConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY";
-  if (isFirebaseConfigured && auth) {
-    auth.onAuthStateChanged((user) => {
-      if (user) {
-        currentUser = user;
-        loadUserData();
-      } else {
-        showLoginModal();
-      }
-    });
-  } else {
-    // LocalStorage oturum kontrolü
+  // Oturum kontrolü — Authentication yok, LocalStorage kullanılıyor
+  {
     const lastUser = localStorage.getItem('dostos_last_user');
     if (lastUser) {
       const users = JSON.parse(localStorage.getItem('dostos_users') || '{}');
@@ -1490,27 +1409,20 @@
   function loadUserData() {
     if (!currentUser) return;
 
-    const isFirebaseConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY";
+    // Her zaman önce LocalStorage'dan yükle
+    const users = JSON.parse(localStorage.getItem('dostos_users') || '{}');
+    userData = users[currentUser.uid];
+    if (!userData) {
+      userData = { name: currentUser.displayName || 'Kullanıcı', slug: currentUser.uid, friends: [] };
+      users[currentUser.uid] = userData;
+      localStorage.setItem('dostos_users', JSON.stringify(users));
+    }
 
-    if (isFirebaseConfigured && db) {
-      db.ref('users/' + currentUser.uid).once('value')
-        .then((snapshot) => {
-          userData = snapshot.val();
-          if (!userData) {
-            userData = {
-              name: currentUser.displayName || currentUser.email?.split('@')[0] || 'Kullanıcı',
-              email: currentUser.email || '',
-              createdAt: new Date().toISOString()
-            };
-            return db.ref('users/' + currentUser.uid).set(userData);
-          }
-          return null;
-        })
-        .then(() => ensureMyFriendCode())
-        .then(() => {
-          updateUserDisplay();
-          return db.ref('data/' + currentUser.uid).once('value');
-        })
+    updateUserDisplay();
+
+    // Firebase varsa veriyi Firebase'den çek, yoksa LocalStorage'dan
+    if (firebaseConfigured && db) {
+      db.ref('data/' + currentUser.uid).once('value')
         .then((snapshot) => {
           const loadedData = snapshot.val();
           data = loadedData ? { ...defaultData(), ...loadedData } : defaultData();
@@ -1521,21 +1433,17 @@
           updateCounts();
         })
         .catch((error) => {
-          console.error('Kullanıcı verisi yüklenemedi:', error);
-          showToast('Kullanıcı verisi yüklenemedi', 'fa-exclamation-circle');
+          console.warn('Firebase veri yüklenemedi, LocalStorage kullanılıyor:', error);
+          const allData = JSON.parse(localStorage.getItem('dostos_data') || '{}');
+          const loadedData = allData[currentUser.uid];
+          data = loadedData ? { ...defaultData(), ...loadedData } : defaultData();
+          loadFriendsData();
+          renderAll();
+          updateBadges();
+          updateNotifBadge();
+          updateCounts();
         });
     } else {
-      // Firebase yapılandırılmadığında uygulamanın mevcut yerel çalışma biçimi korunur.
-      const users = JSON.parse(localStorage.getItem('dostos_users') || '{}');
-      userData = users[currentUser.uid];
-
-      if (!userData) {
-        userData = { name: currentUser.displayName || currentUser.email?.split('@')[0] || 'Kullanıcı', email: currentUser.email, friends: [] };
-        users[currentUser.uid] = userData;
-        localStorage.setItem('dostos_users', JSON.stringify(users));
-      }
-
-      updateUserDisplay();
       const allData = JSON.parse(localStorage.getItem('dostos_data') || '{}');
       const loadedData = allData[currentUser.uid];
       data = loadedData ? { ...defaultData(), ...loadedData } : defaultData();
@@ -1576,9 +1484,7 @@
   function loadFriendsData() {
     if (!currentUser) return;
 
-    const isFirebaseConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY";
-
-    if (isFirebaseConfigured && db) {
+    if (firebaseConfigured && db) {
       stopFriendListeners();
       friendsData = {};
       friendships = {};
@@ -1659,26 +1565,20 @@
 
     // Paylaşım akışının en son değişimini takip etmek için veri kümesine zaman damgası eklenir.
     data._updatedAt = new Date().toISOString();
-    const isFirebaseConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY";
 
-    if (isFirebaseConfigured && db) {
-      db.ref('data/' + currentUser.uid).set(data)
-        .then(() => {
-          renderAll();
-          updateBadges();
-          updateNotifBadge();
-          updateCounts();
-        })
-        .catch((error) => {
-          console.error('Veri kaydetme hatası:', error);
-          showToast('Veri kaydedilemedi', 'fa-exclamation-circle');
-        });
-      return;
-    }
-
+    // Her zaman LocalStorage'a kaydet (offline destek)
     const allData = JSON.parse(localStorage.getItem('dostos_data') || '{}');
     allData[currentUser.uid] = data;
     localStorage.setItem('dostos_data', JSON.stringify(allData));
+
+    // Firebase varsa oraya da kaydet (arkadaşlar görebilsin)
+    if (firebaseConfigured && db) {
+      db.ref('data/' + currentUser.uid).set(data)
+        .catch((error) => {
+          console.warn('Firebase kaydetme hatası:', error);
+        });
+    }
+
     renderAll();
     updateBadges();
     updateNotifBadge();
@@ -1696,9 +1596,7 @@
     document.getElementById('modalCloseBtn').textContent = 'Kapat';
     document.getElementById('modalCloseBtn').onclick = closeModal;
 
-    const isFirebaseConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY";
-
-    if (isFirebaseConfigured) {
+    if (firebaseConfigured) {
       const myCode = (userData && userData.friendCode) || 'Hazırlanıyor…';
 
       // Gelen bekleyen istekler
@@ -1853,7 +1751,7 @@
         fromName: myName,
         fromCode: myCode,
         status: 'pending',
-        sentAt: firebase.database.ServerValue.TIMESTAMP
+        sentAt: Date.now()
       };
       return db.ref().update(updates);
     }).then(() => {
@@ -1874,7 +1772,7 @@
     const friendCode = req.fromCode || '';
     const myName = getDisplayName();
     const myCode = (userData && userData.friendCode) || '';
-    const now = firebase.database.ServerValue.TIMESTAMP;
+    const now = Date.now();
 
     const updates = {};
     // İki taraflı arkadaşlık ekle
@@ -1930,9 +1828,8 @@
 
   function removeFriend(friendId) {
     if (!confirm('Bu arkadaşlığı kaldırmak istediğinize emin misiniz?')) return;
-    const isFirebaseConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY";
 
-    if (isFirebaseConfigured && db) {
+    if (firebaseConfigured && db) {
       const updates = {};
       updates['friendships/' + currentUser.uid + '/' + friendId] = null;
       updates['friendships/' + friendId + '/' + currentUser.uid] = null;

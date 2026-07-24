@@ -1,48 +1,54 @@
 {
   "rules": {
-    ".read": false,
-    ".write": false,
+    // HERKESE OKUMA VE YAZMA İZNİ VERİLDİ (Auth olmadan çalışması için)
+    // Gerçek bir uygulamada bu güvenlik riski oluşturabilir, ancak auth istenmediği için bu şekilde ayarlandı.
+    ".read": true,
+    ".write": true,
 
     "users": {
       "$uid": {
-        ".read": "auth != null && auth.uid === $uid",
-        ".write": "auth != null && auth.uid === $uid"
+        ".read": true,
+        ".write": true
+      }
+    },
+
+    "slugs": {
+      "$slug": {
+        ".read": true,
+        ".write": true
       }
     },
 
     "friendCodes": {
       "$code": {
-        ".read": "auth != null",
-        ".write": "auth != null && (!data.exists() ? newData.child('uid').val() === auth.uid : data.child('uid').val() === auth.uid)",
-        ".validate": "!newData.exists() || (newData.hasChildren(['uid', 'displayName', 'code']) && newData.child('uid').val() === auth.uid && newData.child('code').val() === $code && newData.child('displayName').isString() && newData.child('displayName').val().length <= 80)"
+        ".read": true,
+        ".write": true
       }
     },
 
     "friendRequests": {
       "$toUid": {
-        ".read": "auth != null && auth.uid === $toUid",
+        ".read": true,
         "$fromUid": {
-          ".read": "auth != null && (auth.uid === $toUid || auth.uid === $fromUid)",
-          ".write": "auth != null && (auth.uid === $fromUid || auth.uid === $toUid)",
-          ".validate": "!newData.exists() || (newData.hasChildren(['fromUid', 'fromName', 'fromCode', 'status', 'sentAt']) && newData.child('fromUid').val() === $fromUid && newData.child('status').isString() && newData.child('fromName').isString() && newData.child('fromName').val().length <= 80)"
+          ".read": true,
+          ".write": true
         }
       }
     },
 
     "friendships": {
       "$ownerUid": {
-        ".read": "auth != null && auth.uid === $ownerUid",
+        ".read": true,
         "$friendUid": {
-          ".write": "auth != null && (auth.uid === $ownerUid || auth.uid === $friendUid)",
-          ".validate": "!newData.exists() || (newData.hasChildren(['uid', 'displayName', 'friendCode', 'addedAt']) && newData.child('uid').val() === $friendUid && newData.child('displayName').isString() && newData.child('displayName').val().length <= 80 && newData.child('friendCode').isString() && newData.child('addedAt').isNumber())"
+          ".write": true
         }
       }
     },
 
     "data": {
       "$uid": {
-        ".read": "auth != null && (auth.uid === $uid || root.child('friendships').child(auth.uid).child($uid).exists())",
-        ".write": "auth != null && auth.uid === $uid"
+        ".read": true,
+        ".write": true
       }
     }
   }
