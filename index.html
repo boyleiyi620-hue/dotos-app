@@ -921,6 +921,10 @@
         <button class="btn btn-primary" onclick="randomSuggestion()" title="Rastgele Öneri" style="padding:10px 14px;"><i class="fas fa-dice"></i></button>
       </div>
       <div id="kesfetList"></div>
+      <div class="section-title mt-3">
+        <h3><i class="fas fa-user-friends"></i> Arkadaşlardan Gelenler <span class="count-badge" id="friendSharedCount">0</span></h3>
+      </div>
+      <div id="friendActivityList"></div>
     </div>
 
     <!-- ARENA -->
@@ -1116,21 +1120,27 @@
     appId: "YOUR_APP_ID"
   };
 
-  // Firebase'i başlat
+  // Firebase yalnızca gerçek proje değerleri girildiğinde başlatılır.
+  const firebaseConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY";
   let app, auth, db;
   let currentUser = null;
   let userData = null;
   let friendsData = {};
+  // Arkadaş bağlantıları, kullanıcının özel verisinden ayrı tutulur.
+  let friendships = {};
+  let friendshipListener = null;
+  let friendDataListeners = {};
   let currentAlbumId = null;
   let breathingInterval = null;
 
-  try {
-    app = firebase.initializeApp(firebaseConfig);
-    auth = firebase.auth();
-    db = firebase.database();
-  } catch (e) {
-    console.error('Firebase başlatılamadı:', e);
-    alert('Firebase yapılandırması gerekli. Lütfen firebaseConfig değerlerini güncelleyin.');
+  if (firebaseConfigured) {
+    try {
+      app = firebase.initializeApp(firebaseConfig);
+      auth = firebase.auth();
+      db = firebase.database();
+    } catch (e) {
+      console.error('Firebase başlatılamadı:', e);
+    }
   }
 
   // ================================================================
@@ -1319,12 +1329,22 @@
       auth.createUserWithEmailAndPassword(email, password)
         .then((userCredential) => {
           const user = userCredential.user;
-          db.ref('users/' + user.uid).set({
+          const friendCode = makeFriendCode();
+          const updates = {};
+          updates['users/' + user.uid] = {
             name: name,
             email: email,
             createdAt: new Date().toISOString(),
-            friends: []
-          });
+            friendCode: friendCode
+          };
+          updates['friendCodes/' + friendCode] = {
+            uid: user.uid,
+            displayName: name,
+            code: friendCode
+          };
+          return db.ref().update(updates);
+        })
+        .then(() => {
           showToast('Kayıt başarılı!', 'fa-check-circle');
           closeModal();
         })
@@ -1381,9 +1401,11 @@
       auth.signOut()
         .then(() => {
           showToast('Çıkış yapıldı', 'fa-sign-out-alt');
+          stopFriendListeners();
           currentUser = null;
           userData = null;
           friendsData = {};
+          friendships = {};
           data = defaultData();
           
           const userDisplay = document.getElementById('userDisplay');
@@ -1397,9 +1419,11 @@
         });
     } else {
       localStorage.removeItem('dostos_last_user');
+      stopFriendListeners();
       currentUser = null;
       userData = null;
       friendsData = {};
+      friendships = {};
       data = defaultData();
       
       const userDisplay = document.getElementById('userDisplay');
@@ -1443,71 +1467,92 @@
   // ================================================================
   // FIREBASE DATABASE OPERATIONS
   // ================================================================
+  function makeFriendCode() {
+    // Arkadaşlık kodu davet bağlantısı işlevi görür; Firebase UID'sinden türetilmez.
+    if (window.crypto && window.crypto.getRandomValues) {
+      const bytes = new Uint8Array(10);
+      window.crypto.getRandomValues(bytes);
+      return 'DOST-' + Array.from(bytes, byte => byte.toString(36).padStart(2, '0')).join('').toUpperCase();
+    }
+    return 'DOST-' + (generateId() + Date.now().toString(36)).toUpperCase();
+  }
+
+  function normalizeFriendCode(code) {
+    return String(code || '').trim().replace(/\s+/g, '').toUpperCase();
+  }
+
+  function getDisplayName() {
+    return (userData && userData.name) || currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Kullanıcı';
+  }
+
+  // Firebase'de kullanıcıya ait arkadaş kodu ve kod -> kullanıcı dizini oluşturur.
+  function ensureMyFriendCode() {
+    if (!currentUser || !db) return Promise.resolve();
+    const friendCode = normalizeFriendCode((userData && userData.friendCode) || makeFriendCode());
+    userData = { ...(userData || {}), friendCode };
+    const updates = {};
+    updates['users/' + currentUser.uid + '/friendCode'] = friendCode;
+    updates['friendCodes/' + friendCode] = {
+      uid: currentUser.uid,
+      displayName: getDisplayName(),
+      code: friendCode
+    };
+    return db.ref().update(updates);
+  }
+
   function loadUserData() {
     if (!currentUser) return;
-    
-    // Firebase config kontrolü - placeholder ise LocalStorage kullan
+
     const isFirebaseConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY";
-    
+
     if (isFirebaseConfigured && db) {
-      // Firebase'den yükle
       db.ref('users/' + currentUser.uid).once('value')
         .then((snapshot) => {
           userData = snapshot.val();
           if (!userData) {
-            userData = { name: currentUser.email.split('@')[0], email: currentUser.email, friends: [] };
-            db.ref('users/' + currentUser.uid).set(userData);
+            userData = {
+              name: currentUser.displayName || currentUser.email?.split('@')[0] || 'Kullanıcı',
+              email: currentUser.email || '',
+              createdAt: new Date().toISOString()
+            };
+            return db.ref('users/' + currentUser.uid).set(userData);
           }
-          
-          // Kullanıcı görüntüsünü güncelle
+          return null;
+        })
+        .then(() => ensureMyFriendCode())
+        .then(() => {
           updateUserDisplay();
-          
-          // Kullanıcının verilerini yükle
-          db.ref('data/' + currentUser.uid).once('value')
-            .then((snapshot) => {
-              const loadedData = snapshot.val();
-              if (loadedData) {
-                data = { ...defaultData(), ...loadedData };
-              } else {
-                data = defaultData();
-              }
-              
-              // Arkadaşların verilerini yükle
-              loadFriendsData();
-              
-              renderAll();
-              updateBadges();
-              updateNotifBadge();
-              updateCounts();
-            });
+          return db.ref('data/' + currentUser.uid).once('value');
+        })
+        .then((snapshot) => {
+          const loadedData = snapshot.val();
+          data = loadedData ? { ...defaultData(), ...loadedData } : defaultData();
+          loadFriendsData();
+          renderAll();
+          updateBadges();
+          updateNotifBadge();
+          updateCounts();
+        })
+        .catch((error) => {
+          console.error('Kullanıcı verisi yüklenemedi:', error);
+          showToast('Kullanıcı verisi yüklenemedi', 'fa-exclamation-circle');
         });
     } else {
-      // LocalStorage'dan yükle (Firebase henüz yapılandırılmadıysa)
+      // Firebase yapılandırılmadığında uygulamanın mevcut yerel çalışma biçimi korunur.
       const users = JSON.parse(localStorage.getItem('dostos_users') || '{}');
       userData = users[currentUser.uid];
-      
+
       if (!userData) {
         userData = { name: currentUser.displayName || currentUser.email?.split('@')[0] || 'Kullanıcı', email: currentUser.email, friends: [] };
         users[currentUser.uid] = userData;
         localStorage.setItem('dostos_users', JSON.stringify(users));
       }
-      
-      // Kullanıcı görüntüsünü güncelle
+
       updateUserDisplay();
-      
-      // Kullanıcının verilerini yükle
       const allData = JSON.parse(localStorage.getItem('dostos_data') || '{}');
       const loadedData = allData[currentUser.uid];
-      
-      if (loadedData) {
-        data = { ...defaultData(), ...loadedData };
-      } else {
-        data = defaultData();
-      }
-      
-      // Arkadaşların verilerini yükle
+      data = loadedData ? { ...defaultData(), ...loadedData } : defaultData();
       loadFriendsData();
-      
       renderAll();
       updateBadges();
       updateNotifBadge();
@@ -1527,64 +1572,90 @@
     }
   }
 
-  function loadFriendsData() {
-    if (!userData || !userData.friends) return;
-    
-    const isFirebaseConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY";
-    
-    if (isFirebaseConfigured && db) {
-      friendsData = {};
-      userData.friends.forEach(friendId => {
-        // Arkadaşın kendi verisini yükle
-        db.ref('data/' + friendId).once('value')
-          .then((snapshot) => {
-            friendsData[friendId] = snapshot.val();
-            // Arkadaşın adını da al
-            db.ref('users/' + friendId).once('value').then(uSnap => {
-              if (uSnap.val()) {
-                if (!friendsData[friendId]) friendsData[friendId] = {};
-                friendsData[friendId]._name = uSnap.val().name || friendId;
-              }
-              renderAll();
-            });
-          });
-      });
-      // Gerçek zamanlı dinleme: arkadaşların kesfet verisini izle
-      userData.friends.forEach(friendId => {
-        db.ref('data/' + friendId + '/kesfet').on('value', (snapshot) => {
-          if (!friendsData[friendId]) friendsData[friendId] = {};
-          friendsData[friendId].kesfet = snapshot.val() || [];
-          renderAll();
-        });
-      });
-    } else {
-      friendsData = {};
-      const allData = JSON.parse(localStorage.getItem('dostos_data') || '{}');
-      userData.friends.forEach(friendId => {
-        if (allData[friendId]) {
-          friendsData[friendId] = allData[friendId];
-        }
-      });
-      // sharedFeeds'den de yükle
-      const myData = allData[currentUser.uid];
-      if (myData && myData.sharedFeeds) {
-        Object.entries(myData.sharedFeeds).forEach(([uid, shared]) => {
-          if (!friendsData[uid]) friendsData[uid] = {};
-          friendsData[uid].kesfet = shared.kesfet || [];
-          friendsData[uid]._name = shared.name || uid;
-        });
-      }
+  function stopFriendListeners() {
+    if (friendshipListener && currentUser && db) {
+      db.ref('friendships/' + currentUser.uid).off('value', friendshipListener);
     }
+    Object.values(friendDataListeners).forEach(({ ref, callback }) => ref.off('value', callback));
+    friendshipListener = null;
+    friendDataListeners = {};
+  }
+
+  function loadFriendsData() {
+    if (!currentUser) return;
+
+    const isFirebaseConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY";
+
+    if (isFirebaseConfigured && db) {
+      stopFriendListeners();
+      friendsData = {};
+      friendships = {};
+      const friendshipRef = db.ref('friendships/' + currentUser.uid);
+
+      friendshipListener = (snapshot) => {
+        const nextFriendships = snapshot.val() || {};
+        friendships = nextFriendships;
+
+        // Silinen arkadaşlara ait veri dinleyicilerini sonlandır.
+        Object.keys(friendDataListeners).forEach((friendId) => {
+          if (!nextFriendships[friendId]) {
+            const listener = friendDataListeners[friendId];
+            listener.ref.off('value', listener.callback);
+            delete friendDataListeners[friendId];
+            delete friendsData[friendId];
+          }
+        });
+
+        Object.entries(nextFriendships).forEach(([friendId, connection]) => {
+          const friendName = connection.displayName || 'Arkadaş';
+          if (friendsData[friendId]) {
+            friendsData[friendId]._name = friendName;
+            friendsData[friendId]._friendCode = connection.friendCode || '';
+          }
+
+          if (!friendDataListeners[friendId]) {
+            const friendDataRef = db.ref('data/' + friendId);
+            const callback = (friendSnapshot) => {
+              const friendPayload = friendSnapshot.val() || {};
+              friendsData[friendId] = {
+                ...friendPayload,
+                _name: friendName,
+                _friendCode: connection.friendCode || ''
+              };
+              renderAll();
+            };
+            friendDataListeners[friendId] = { ref: friendDataRef, callback };
+            friendDataRef.on('value', callback);
+          }
+        });
+        renderAll();
+      };
+
+      friendshipRef.on('value', friendshipListener);
+      return;
+    }
+
+    // Firebase kapalıysa eski yerel deneme davranışı korunur.
+    friendsData = {};
+    friendships = {};
+    const allData = JSON.parse(localStorage.getItem('dostos_data') || '{}');
+    const friendIds = (userData && userData.friends) || [];
+    friendIds.forEach((friendId) => {
+      friendships[friendId] = { uid: friendId, displayName: friendId };
+      if (allData[friendId]) {
+        friendsData[friendId] = { ...allData[friendId], _name: friendId };
+      }
+    });
   }
 
   function saveData() {
     if (!currentUser) return;
-    
-    // Firebase config kontrolü - placeholder ise LocalStorage kullan
+
+    // Paylaşım akışının en son değişimini takip etmek için veri kümesine zaman damgası eklenir.
+    data._updatedAt = new Date().toISOString();
     const isFirebaseConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY";
-    
+
     if (isFirebaseConfigured && db) {
-      // Firebase'e kaydet
       db.ref('data/' + currentUser.uid).set(data)
         .then(() => {
           renderAll();
@@ -1596,33 +1667,16 @@
           console.error('Veri kaydetme hatası:', error);
           showToast('Veri kaydedilemedi', 'fa-exclamation-circle');
         });
-    } else {
-      // LocalStorage'a kaydet (Firebase henüz yapılandırılmadıysa)
-      const allData = JSON.parse(localStorage.getItem('dostos_data') || '{}');
-      allData[currentUser.uid] = data;
-      localStorage.setItem('dostos_data', JSON.stringify(allData));
-      
-      // LocalStorage modunda arkadaşlara da güncel veriyi yaz
-      if (userData && userData.friends && userData.friends.length) {
-        userData.friends.forEach(friendId => {
-          // Arkadaşın shared_feed alanına bu kullanıcının kesfet verisini yaz
-          const friendAllData = JSON.parse(localStorage.getItem('dostos_data') || '{}');
-          if (!friendAllData[friendId]) friendAllData[friendId] = {};
-          if (!friendAllData[friendId].sharedFeeds) friendAllData[friendId].sharedFeeds = {};
-          friendAllData[friendId].sharedFeeds[currentUser.uid] = {
-            name: userData.name || currentUser.uid,
-            kesfet: data.kesfet,
-            updatedAt: new Date().toISOString()
-          };
-          localStorage.setItem('dostos_data', JSON.stringify(friendAllData));
-        });
-      }
-      
-      renderAll();
-      updateBadges();
-      updateNotifBadge();
-      updateCounts();
+      return;
     }
+
+    const allData = JSON.parse(localStorage.getItem('dostos_data') || '{}');
+    allData[currentUser.uid] = data;
+    localStorage.setItem('dostos_data', JSON.stringify(allData));
+    renderAll();
+    updateBadges();
+    updateNotifBadge();
+    updateCounts();
   }
 
   // ================================================================
@@ -1630,192 +1684,173 @@
   // ================================================================
   function showFriendModal() {
     const modal = document.getElementById('genericModal');
-    document.getElementById('modalTitle').innerHTML = '<i class="fas fa-user-friends text-accent"></i> Arkadaş Ekle';
+    document.getElementById('modalTitle').innerHTML = '<i class="fas fa-user-friends text-accent"></i> Arkadaşlar';
     document.getElementById('modalSaveBtn').style.display = 'inline-flex';
-    document.getElementById('modalSaveBtn').textContent = 'Ekle';
+    document.getElementById('modalSaveBtn').textContent = 'Arkadaş Ekle';
     document.getElementById('modalCloseBtn').style.display = 'inline-flex';
     document.getElementById('modalCloseBtn').textContent = 'Kapat';
     document.getElementById('modalCloseBtn').onclick = closeModal;
 
     const isFirebaseConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY";
 
-    document.getElementById('modalBody').innerHTML = `
-      <label>Arkadaşın İsmi</label>
-      <input id="friendName" type="text" placeholder="Ahmet" />
-      ${isFirebaseConfigured ? `
-        <label>Arkadaşın E-posta Adresi</label>
-        <input id="friendEmail" type="email" placeholder="arkadas@email.com" />
-      ` : ''}
-      <div style="margin-top:16px;">
-        <strong>Mevcut Arkadaşlar:</strong>
-        <div id="friendsList" style="margin-top:8px;"></div>
-      </div>
-    `;
+    if (isFirebaseConfigured) {
+      const myCode = (userData && userData.friendCode) || 'Hazırlanıyor…';
+      const friendEntries = Object.entries(friendships);
+      const friendsHtml = friendEntries.length
+        ? friendEntries.map(([friendId, connection]) => `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:var(--bg-card);border-radius:10px;margin-bottom:6px;border:1px solid var(--border);">
+            <div>
+              <div style="font-weight:700;">${escapeHtml(connection.displayName || 'Arkadaş')}</div>
+              <div style="font-size:10px;color:var(--text-muted);">${escapeHtml(connection.friendCode || friendId)}</div>
+            </div>
+            <button class="btn btn-red btn-sm" onclick="removeFriend('${friendId}')">Sil</button>
+          </div>
+        `).join('')
+        : '<div class="empty-state" style="padding:12px 0;"><i class="fas fa-user-friends"></i>Henüz arkadaş yok.<div class="hint">Arkadaşının kodunu girerek paylaşımı başlat.</div></div>';
 
-    // Mevcut arkadaşları listele
-    if (userData && userData.friends && userData.friends.length > 0) {
-      let friendsHtml = '';
-      if (isFirebaseConfigured) {
-        userData.friends.forEach(friendId => {
-          db.ref('users/' + friendId).once('value').then(snapshot => {
-            const friendData = snapshot.val();
-            if (friendData) {
-              friendsHtml += `
-                <div style="display:flex;justify-content:space-between;align-items:center;padding:8px;background:var(--bg-card);border-radius:8px;margin-bottom:4px;">
-                  <span>${escapeHtml(friendData.name || friendData.email)}</span>
-                  <button class="btn btn-red btn-sm" onclick="removeFriend('${friendId}')">Sil</button>
-                </div>
-              `;
-              document.getElementById('friendsList').innerHTML = friendsHtml;
-            }
-          });
-        });
-      } else {
-        // LocalStorage için arkadaş listesi
-        const users = JSON.parse(localStorage.getItem('dostos_users') || '{}');
-        userData.friends.forEach(friendId => {
-          const friend = users[friendId];
-          if (friend) {
-            friendsHtml += `
-              <div style="display:flex;justify-content:space-between;align-items:center;padding:8px;background:var(--bg-card);border-radius:8px;margin-bottom:4px;">
-                <span>${escapeHtml(friend.name || friendId)}</span>
-                <button class="btn btn-red btn-sm" onclick="removeFriend('${friendId}')">Sil</button>
-              </div>
-            `;
-          }
-        });
-        document.getElementById('friendsList').innerHTML = friendsHtml || '<div class="empty-state" style="padding:10px 0;">Henüz arkadaş yok.</div>';
-      }
+      document.getElementById('modalBody').innerHTML = `
+        <div style="padding:12px;border-radius:12px;background:var(--accent-glow);border:1px solid rgba(249,115,22,.25);margin-bottom:16px;">
+          <div style="font-size:11px;color:var(--text-secondary);font-weight:700;margin-bottom:6px;">SENİN ARKADAŞ KODUN</div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <strong style="font-size:18px;letter-spacing:.7px;flex:1;">${escapeHtml(myCode)}</strong>
+            <button class="btn btn-sm btn-outline" onclick="copyFriendCode()"><i class="fas fa-copy"></i> Kopyala</button>
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:7px;">Bu kodu arkadaşınla paylaş. Kodunu eklediğin kişi, eklediğin içerikleri uygulamasında görür.</div>
+        </div>
+        <label>Arkadaşının Kodu</label>
+        <input id="friendCodeInput" type="text" autocomplete="off" autocapitalize="characters" placeholder="Örn: DOST-ABC123XYZ" />
+        <div style="margin-top:18px;"><strong>Mevcut Arkadaşlar</strong><div id="friendsList" style="margin-top:8px;">${friendsHtml}</div></div>
+      `;
+      document.getElementById('modalSaveBtn').onclick = addFriendByCode;
     } else {
-      document.getElementById('friendsList').innerHTML = '<div class="empty-state" style="padding:10px 0;">Henüz arkadaş yok.</div>';
-    }
-
-    document.getElementById('modalSaveBtn').onclick = () => {
-      if (isFirebaseConfigured) {
-        const friendEmail = document.getElementById('friendEmail').value.trim();
-        if (!friendEmail) {
-          showToast('E-posta gerekli', 'fa-exclamation-circle');
-          return;
-        }
-        addFriendByEmail(friendEmail);
-      } else {
-        // LocalStorage için basit arkadaş ekleme
+      const legacyFriends = (userData && userData.friends) || [];
+      document.getElementById('modalBody').innerHTML = `
+        <label>Arkadaşın İsmi</label>
+        <input id="friendName" type="text" placeholder="Ahmet" />
+        <div class="empty-state" style="padding:12px 0;margin-top:14px;"><i class="fas fa-cloud"></i>Arkadaşlarla cihazlar arası paylaşım için Firebase yapılandırması gerekir.</div>
+        <div style="margin-top:12px;font-size:12px;color:var(--text-muted);">Yerel deneme arkadaş sayısı: ${legacyFriends.length}</div>
+      `;
+      document.getElementById('modalSaveBtn').onclick = () => {
         const friendName = document.getElementById('friendName').value.trim();
-        if (!friendName) {
-          showToast('İsim gerekli', 'fa-exclamation-circle');
-          return;
-        }
+        if (!friendName) return showToast('İsim gerekli', 'fa-exclamation-circle');
         addFriendByName(friendName);
-      }
-    };
+      };
+    }
 
     modal.classList.add('open');
   }
 
-  function addFriendByName(name) {
-    if (!userData.friends) userData.friends = [];
-    
-    // Basit ID oluştur
-    const friendId = 'friend_' + Date.now();
-    
-    // Arkadaş listesine ekle
-    userData.friends.push(friendId);
-    
-    // LocalStorage'a kaydet
-    const users = JSON.parse(localStorage.getItem('dostos_users') || '{}');
-    if (!users[friendId]) {
-      users[friendId] = {
-        name: name,
-        friends: [],
-        createdAt: new Date().toISOString()
-      };
+  function copyFriendCode() {
+    const friendCode = userData && userData.friendCode;
+    if (!friendCode) return showToast('Arkadaş kodun hazırlanıyor', 'fa-sync');
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(friendCode)
+        .then(() => showToast('Arkadaş kodu kopyalandı', 'fa-copy'))
+        .catch(() => showToast('Kopyalama başarısız oldu', 'fa-exclamation-circle'));
+      return;
     }
-    users[currentUser.uid] = userData;
-    localStorage.setItem('dostos_users', JSON.stringify(users));
-    
-    showToast('Arkadaş eklendi!', 'fa-check-circle');
-    showFriendModal();
+    const fallback = document.createElement('textarea');
+    fallback.value = friendCode;
+    document.body.appendChild(fallback);
+    fallback.select();
+    document.execCommand('copy');
+    fallback.remove();
+    showToast('Arkadaş kodu kopyalandı', 'fa-copy');
   }
 
-  function addFriendByEmail(email) {
-    // E-posta ile kullanıcı bul
-    auth.fetchSignInMethodsForEmail(email)
-      .then((signInMethods) => {
-        if (signInMethods.length === 0) {
-          showToast('Bu e-posta ile kayıtlı kullanıcı yok', 'fa-exclamation-circle');
-          return;
+  function addFriendByCode() {
+    if (!currentUser || !db) return;
+    const friendCode = normalizeFriendCode(document.getElementById('friendCodeInput').value);
+    if (!friendCode) return showToast('Arkadaş kodu gerekli', 'fa-exclamation-circle');
+
+    ensureMyFriendCode()
+      .then(() => db.ref('friendCodes/' + friendCode).once('value'))
+      .then((snapshot) => {
+        const friendInfo = snapshot.val();
+        const friendId = typeof friendInfo === 'string' ? friendInfo : friendInfo?.uid;
+        if (!friendId) {
+          showToast('Bu arkadaş kodu bulunamadı', 'fa-exclamation-circle');
+          return null;
         }
-        
-        // Kullanıcı ID'sini bul (basit yaklaşım - gerçek uygulamada kullanıcı ID'si farklı bir yolla bulunmalı)
-        db.ref('users').orderByChild('email').equalTo(email).once('value')
-          .then((snapshot) => {
-            if (snapshot.exists()) {
-              const friendId = Object.keys(snapshot.val())[0];
-              if (friendId === currentUser.uid) {
-                showToast('Kendinizi arkadaş olarak ekleyemezsiniz', 'fa-exclamation-circle');
-                return;
-              }
-              if (userData.friends && userData.friends.includes(friendId)) {
-                showToast('Bu kullanıcı zaten arkadaş listenizde', 'fa-exclamation-circle');
-                return;
-              }
-              
-              // Arkadaş olarak ekle
-              if (!userData.friends) userData.friends = [];
-              userData.friends.push(friendId);
-              db.ref('users/' + currentUser.uid).update({ friends: userData.friends });
-              
-              // Karşılıklı arkadaşlık (isteğe bağlı)
-              db.ref('users/' + friendId).once('value').then(snapshot => {
-                const friendData = snapshot.val();
-                if (friendData) {
-                  if (!friendData.friends) friendData.friends = [];
-                  if (!friendData.friends.includes(currentUser.uid)) {
-                    friendData.friends.push(currentUser.uid);
-                    db.ref('users/' + friendId).update({ friends: friendData.friends });
-                  }
-                }
-              });
-              
-              showToast('Arkadaş eklendi!', 'fa-check-circle');
-              loadFriendsData();
-              closeModal();
-            } else {
-              showToast('Kullanıcı bulunamadı', 'fa-exclamation-circle');
-            }
-          });
+        if (friendId === currentUser.uid) {
+          showToast('Kendi kodunu ekleyemezsin', 'fa-exclamation-circle');
+          return null;
+        }
+        if (friendships[friendId]) {
+          showToast('Bu kişi zaten arkadaş listende', 'fa-exclamation-circle');
+          return null;
+        }
+
+        const friendName = friendInfo.displayName || 'Arkadaş';
+        const myCode = userData.friendCode;
+        const myName = getDisplayName();
+        const now = firebase.database.ServerValue.TIMESTAMP;
+        const updates = {};
+        updates['friendships/' + currentUser.uid + '/' + friendId] = {
+          uid: friendId,
+          displayName: friendName,
+          friendCode: friendCode,
+          addedAt: now
+        };
+        updates['friendships/' + friendId + '/' + currentUser.uid] = {
+          uid: currentUser.uid,
+          displayName: myName,
+          friendCode: myCode,
+          addedAt: now
+        };
+        return db.ref().update(updates);
+      })
+      .then((result) => {
+        if (result === null) return;
+        showToast('Arkadaş eklendi; paylaşımlar artık eşitleniyor', 'fa-check-circle');
+        closeModal();
       })
       .catch((error) => {
-        showToast('Hata: ' + error.message, 'fa-exclamation-circle');
+        console.error('Arkadaş ekleme hatası:', error);
+        showToast('Arkadaş eklenemedi: ' + error.message, 'fa-exclamation-circle');
       });
+  }
+
+  function addFriendByName(name) {
+    if (!userData.friends) userData.friends = [];
+    const friendId = 'friend_' + Date.now();
+    userData.friends.push(friendId);
+    const users = JSON.parse(localStorage.getItem('dostos_users') || '{}');
+    users[friendId] = users[friendId] || { name: name, friends: [], createdAt: new Date().toISOString() };
+    users[currentUser.uid] = userData;
+    localStorage.setItem('dostos_users', JSON.stringify(users));
+    showToast('Yerel arkadaş eklendi', 'fa-check-circle');
+    showFriendModal();
   }
 
   function removeFriend(friendId) {
     if (!confirm('Bu arkadaşlığı kaldırmak istediğinize emin misiniz?')) return;
-    
     const isFirebaseConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY";
-    
+
     if (isFirebaseConfigured && db) {
-      userData.friends = userData.friends.filter(id => id !== friendId);
-      db.ref('users/' + currentUser.uid).update({ friends: userData.friends });
-      
-      // Karşılıklı kaldırma
-      db.ref('users/' + friendId).once('value').then(snapshot => {
-        const friendData = snapshot.val();
-        if (friendData && friendData.friends) {
-          friendData.friends = friendData.friends.filter(id => id !== currentUser.uid);
-          db.ref('users/' + friendId).update({ friends: friendData.friends });
-        }
-      });
-    } else {
-      // LocalStorage için kaldırma
-      userData.friends = userData.friends.filter(id => id !== friendId);
-      const users = JSON.parse(localStorage.getItem('dostos_users') || '{}');
-      users[currentUser.uid] = userData;
-      localStorage.setItem('dostos_users', JSON.stringify(users));
+      const updates = {};
+      updates['friendships/' + currentUser.uid + '/' + friendId] = null;
+      updates['friendships/' + friendId + '/' + currentUser.uid] = null;
+      db.ref().update(updates)
+        .then(() => {
+          delete friendsData[friendId];
+          delete friendships[friendId];
+          showToast('Arkadaş kaldırıldı', 'fa-trash');
+          closeModal();
+        })
+        .catch((error) => {
+          console.error('Arkadaş silme hatası:', error);
+          showToast('Arkadaş kaldırılamadı', 'fa-exclamation-circle');
+        });
+      return;
     }
-    
+
+    userData.friends = (userData.friends || []).filter(id => id !== friendId);
+    const users = JSON.parse(localStorage.getItem('dostos_users') || '{}');
+    users[currentUser.uid] = userData;
+    localStorage.setItem('dostos_users', JSON.stringify(users));
     delete friendsData[friendId];
+    delete friendships[friendId];
     showToast('Arkadaş kaldırıldı', 'fa-trash');
     showFriendModal();
   }
@@ -1882,7 +1917,7 @@
       data.expenses.length + data.bbqs.length + data.projects.length + data.feed.length +
       data.music.length + data.games.length + data.giftfunds.length + data.albums.length +
       data.inventory.length + data.debts.length;
-    const friendCount = userData && userData.friends ? userData.friends.length : 0;
+    const friendCount = Object.keys(friendships).length;
     const body = document.getElementById('modalBody');
     body.innerHTML = `
       <div class="detail-item"><span class="label">İsim</span><span class="value">${escapeHtml(userData?.name || 'Misafir')}</span></div>
@@ -2122,6 +2157,7 @@
   // ================================================================
   function renderAll() {
     renderKesfet();
+    renderFriendActivity();
     renderArenaLigler();
     renderChallenges();
     renderLeaderboard();
@@ -2239,6 +2275,73 @@
     }
 
     container.innerHTML = html;
+  }
+
+  function sharedItemPresentation(type, item) {
+    const presentations = {
+      kesfet: { icon: 'fa-compass', label: 'Aktivite önerisi', title: item.title, detail: [item.date, item.location, item.budget].filter(Boolean).join(' · ') },
+      arenaLigler: { icon: 'fa-trophy', label: 'Lig', title: item.name, detail: item.detail || item.status || '' },
+      challenges: { icon: 'fa-bolt', label: 'Meydan okuma', title: item.title, detail: item.desc || item.progress || '' },
+      leaderboard: { icon: 'fa-ranking-star', label: 'Lider panosu oyuncusu', title: item.name, detail: item.score != null ? item.score + ' puan' : '' },
+      expenses: { icon: 'fa-coins', label: 'İşlem', title: item.title, detail: item.amount != null ? (item.type === 'gelir' ? 'Gelir: ₺' : 'Gider: ₺') + item.amount : '' },
+      debts: { icon: 'fa-hand-holding-usd', label: 'Borç kaydı', title: [item.from, item.to].filter(Boolean).join(' → ') || 'Borç kaydı', detail: item.amount != null ? '₺' + item.amount + (item.reason ? ' · ' + item.reason : '') : item.reason || '' },
+      subscriptions: { icon: 'fa-repeat', label: 'Abonelik', title: item.name, detail: item.amount != null ? '₺' + item.amount : item.status || '' },
+      giftfunds: { icon: 'fa-gift', label: 'Hediye fonu', title: item.name, detail: item.target != null ? 'Hedef: ₺' + item.target : '' },
+      bbqs: { icon: 'fa-fire', label: 'Mangal etkinliği', title: item.name, detail: item.status || item.items || '' },
+      projects: { icon: 'fa-clipboard-list', label: 'Proje', title: item.name, detail: item.status || '' },
+      inventory: { icon: 'fa-toolbox', label: 'Envanter öğesi', title: item.name || item.title, detail: item.status || '' },
+      feed: { icon: 'fa-rss', label: 'Canlı akış', title: item.text || item.title || item.name, detail: '' },
+      music: { icon: 'fa-music', label: 'Müzik', title: item.title || item.name || item.track, detail: item.artist || '' },
+      games: { icon: 'fa-gamepad', label: 'Oyun', title: item.name || item.title, detail: item.status || '' },
+      albums: { icon: 'fa-images', label: 'Albüm', title: item.name || item.title, detail: '' }
+    };
+    const fallback = { icon: 'fa-share-nodes', label: 'Paylaşım', title: item.title || item.name || 'Yeni içerik', detail: '' };
+    return presentations[type] || fallback;
+  }
+
+  function renderFriendActivity() {
+    const container = document.getElementById('friendActivityList');
+    const count = document.getElementById('friendSharedCount');
+    if (!container || !count) return;
+
+    const shareableCollections = ['kesfet', 'arenaLigler', 'challenges', 'leaderboard', 'expenses', 'debts', 'subscriptions', 'giftfunds', 'bbqs', 'projects', 'inventory', 'feed', 'music', 'games', 'albums'];
+    const items = [];
+    Object.entries(friendsData).forEach(([friendId, friendData]) => {
+      shareableCollections.forEach((type) => {
+        if (!Array.isArray(friendData[type])) return;
+        friendData[type].forEach((item) => {
+          const view = sharedItemPresentation(type, item);
+          items.push({
+            friendId,
+            friendName: friendData._name || friendships[friendId]?.displayName || 'Arkadaş',
+            type,
+            item,
+            view,
+            changedAt: item.updatedAt || item.createdAt || friendData._updatedAt || ''
+          });
+        });
+      });
+    });
+
+    items.sort((a, b) => String(b.changedAt).localeCompare(String(a.changedAt)));
+    count.textContent = items.length;
+    if (!items.length) {
+      container.innerHTML = `<div class="empty-state"><i class="fas fa-share-nodes"></i>Henüz arkadaş paylaşımı yok.<div class="hint">Arkadaşın bir içerik eklediğinde burada otomatik görünür.</div></div>`;
+      return;
+    }
+
+    container.innerHTML = items.slice(0, 50).map(({ friendName, view }) => `
+      <div class="card" style="border-left:3px solid var(--blue);cursor:default;">
+        <div style="font-size:10px;font-weight:700;color:var(--blue);margin-bottom:5px;"><i class="fas fa-user"></i> ${escapeHtml(friendName)} paylaştı · ${escapeHtml(view.label)}</div>
+        <div class="card-row">
+          <div class="card-icon blue"><i class="fas ${escapeHtml(view.icon)}"></i></div>
+          <div class="card-body">
+            <div class="title">${escapeHtml(view.title || 'Yeni içerik')}</div>
+            ${view.detail ? `<div class="desc">${escapeHtml(view.detail)}</div>` : ''}
+          </div>
+        </div>
+      </div>
+    `).join('');
   }
 
   function showKesfetDetail(id) {
@@ -2373,6 +2476,7 @@
         ${renderParticipants(lig.participants)}
         <div class="card-actions" onclick="event.stopPropagation();">
           <button class="btn btn-primary btn-sm" onclick="openMatchModal('${lig.id}')">⚽ Maç Ekle</button>
+          <button class="btn btn-green btn-sm" onclick="openTeamModal('${lig.id}')"><i class="fas fa-users"></i> Takım Ekle</button>
           <button class="btn btn-sm" onclick="openStandingsModal('${lig.id}')">📊 Puan Durumu</button>
           <button class="btn btn-sm btn-outline" onclick="openParticipantModal('arenaLigler','${lig.id}')"><i class="fas fa-user-plus"></i></button>
           <div class="action-buttons">
@@ -2424,6 +2528,38 @@
     modal.classList.add('open');
   }
 
+  function openTeamModal(ligId) {
+    const lig = data.arenaLigler.find(l => l.id === ligId);
+    if (!lig) return;
+    const modal = document.getElementById('genericModal');
+    document.getElementById('modalTitle').innerHTML = `<i class="fas fa-users text-accent"></i> ${escapeHtml(lig.name)} - Takım Ekle`;
+    document.getElementById('modalSaveBtn').style.display = 'inline-flex';
+    document.getElementById('modalSaveBtn').textContent = 'Takımı Kaydet';
+    document.getElementById('modalCloseBtn').style.display = 'inline-flex';
+    document.getElementById('modalCloseBtn').textContent = 'Kapat';
+    document.getElementById('modalCloseBtn').onclick = closeModal;
+
+    const existingTeams = (lig.standings || []).map(standing => `<span class="participant-badge coming">${escapeHtml(standing.team)}</span>`).join('') || '<span class="text-muted fs-12">Henüz takım yok.</span>';
+    document.getElementById('modalBody').innerHTML = `
+      <label>Takım Adı</label>
+      <input id="leagueTeamName" type="text" maxlength="50" placeholder="Örn: Şimşekler FK" />
+      <div style="margin-top:16px;"><strong>Mevcut Takımlar</strong><div style="margin-top:8px;">${existingTeams}</div></div>
+    `;
+
+    document.getElementById('modalSaveBtn').onclick = () => {
+      const team = document.getElementById('leagueTeamName').value.trim();
+      if (!team) return showToast('Takım adı gerekli', 'fa-exclamation-circle');
+      if (!lig.standings) lig.standings = [];
+      const duplicate = lig.standings.some(standing => String(standing.team || '').toLocaleLowerCase('tr-TR') === team.toLocaleLowerCase('tr-TR'));
+      if (duplicate) return showToast('Bu takım zaten ligde var', 'fa-exclamation-circle');
+      lig.standings.push({ id: generateId(), team, o: 0, g: 0, b: 0, m: 0, p: 0 });
+      saveData();
+      addNotification(`📊 "${team}" takımı eklendi.`);
+      closeModal();
+    };
+    modal.classList.add('open');
+  }
+
   function openStandingsModal(ligId) {
     const lig = data.arenaLigler.find(l => l.id === ligId);
     if (!lig) return;
@@ -2459,9 +2595,12 @@
 
     document.getElementById('modalSaveBtn').onclick = () => {
       const team = document.getElementById('s_team').value.trim();
-      if (!team) return;
+      if (!team) return showToast('Takım adı gerekli', 'fa-exclamation-circle');
       if (!lig.standings) lig.standings = [];
-      lig.standings.push({ team, o:0, g:0, b:0, m:0, p:0 });
+      if (lig.standings.some(standing => String(standing.team || '').toLocaleLowerCase('tr-TR') === team.toLocaleLowerCase('tr-TR'))) {
+        return showToast('Bu takım zaten ligde var', 'fa-exclamation-circle');
+      }
+      lig.standings.push({ id: generateId(), team, o:0, g:0, b:0, m:0, p:0 });
       saveData();
       openStandingsModal(ligId);
       addNotification(`📊 "${team}" takımı eklendi.`);
@@ -2699,7 +2838,7 @@
   function updateWalletUI() {
     const total = data.expenses.reduce((s, e) => s + (e.type === 'gelir' ? e.amount : -e.amount), 0);
     document.getElementById('walletAmount').textContent = total.toLocaleString('tr-TR');
-    document.getElementById('memberCount').textContent = (userData && userData.friends ? userData.friends.length + 1 : 1);
+    document.getElementById('memberCount').textContent = Object.keys(friendships).length + 1;
     const income = data.expenses.filter(e => e.type === 'gelir').reduce((s, e) => s + e.amount, 0);
     const expense = data.expenses.filter(e => e.type === 'gider').reduce((s, e) => s + e.amount, 0);
     document.getElementById('totalIncome').textContent = income.toLocaleString('tr-TR');
@@ -2712,19 +2851,19 @@
 
   function renderFriendsWallets() {
     const container = document.getElementById('friendsWalletList');
-    document.getElementById('friendsWalletCount').textContent = Object.keys(friendsData).length;
-    
-    if (!userData || !userData.friends || userData.friends.length === 0) {
-      container.innerHTML = `<div class="empty-state"><i class="fas fa-user-friends"></i>Henüz arkadaş yok.<div class="hint">Arkadaş ekleyerek onların cüzdanlarını görüntüleyin.</div></div>`;
+    document.getElementById('friendsWalletCount').textContent = Object.keys(friendships).length;
+
+    if (!Object.keys(friendships).length) {
+      container.innerHTML = `<div class="empty-state"><i class="fas fa-user-friends"></i>Henüz arkadaş yok.<div class="hint">Arkadaş kodu ile arkadaş ekleyerek onların paylaşımlarını görüntüleyin.</div></div>`;
       return;
     }
-    
+
     let html = '';
-    userData.friends.forEach(friendId => {
+    Object.entries(friendships).forEach(([friendId, connection]) => {
       const friendData = friendsData[friendId];
       if (friendData) {
-        const friendTotal = (friendData.expenses || []).reduce((s, e) => s + (e.type === 'gelir' ? e.amount : -e.amount), 0);
-        const friendName = friendData.name || 'Arkadaş';
+        const friendTotal = (friendData.expenses || []).reduce((sum, expense) => sum + (expense.type === 'gelir' ? expense.amount : -expense.amount), 0);
+        const friendName = friendData._name || connection.displayName || 'Arkadaş';
         html += `
           <div class="card" style="padding:12px 14px;">
             <div class="flex-between">
@@ -2732,19 +2871,15 @@
               <span class="fw-700" style="color:var(--accent);">₺${friendTotal.toLocaleString('tr-TR')}</span>
             </div>
             <div class="fs-11 text-muted mt-1">
-              ${(friendData.expenses || []).length} işlem · 
-              Gelir: ₺${(friendData.expenses || []).filter(e => e.type === 'gelir').reduce((s, e) => s + e.amount, 0).toLocaleString('tr-TR')}
+              ${(friendData.expenses || []).length} işlem ·
+              Gelir: ₺${(friendData.expenses || []).filter(expense => expense.type === 'gelir').reduce((sum, expense) => sum + expense.amount, 0).toLocaleString('tr-TR')}
             </div>
           </div>
         `;
       }
     });
-    
-    if (!html) {
-      html = `<div class="empty-state"><i class="fas fa-sync"></i>Arkadaş verileri yükleniyor...</div>`;
-    }
-    
-    container.innerHTML = html;
+
+    container.innerHTML = html || `<div class="empty-state"><i class="fas fa-sync"></i>Arkadaş verileri yükleniyor...</div>`;
   }
 
   function renderSubscriptions() {
