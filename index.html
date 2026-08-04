@@ -62,12 +62,16 @@
       --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       --nav-height: 80px;
       --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --safe-top: env(safe-area-inset-top, 0px);
     }
     html, body {
       height:100%; font-family:'Inter', -apple-system, sans-serif;
       background: radial-gradient(ellipse at top, #0f172a 0%, #020617 100%);
       color:var(--text-primary); overflow:hidden;
       -webkit-tap-highlight-color:transparent;
+      /* iOS PWA safe area desteği */
+      padding-top: env(safe-area-inset-top, 0px);
+      -webkit-padding-top: env(safe-area-inset-top, 0px);
     }
     input, select, textarea, button {
       user-select: text !important;
@@ -101,6 +105,8 @@
       display:flex; flex-direction:column; height:100%; max-width:480px; margin:0 auto;
       position:relative; overflow:hidden; background:var(--bg-primary);
       box-shadow:0 0 60px rgba(0,0,0,0.8);
+      /* iOS PWA'de header görünür olması için */
+      width:100%;
     }
     @media (min-width:481px) {
       #app { border-radius:24px; margin-top:12px; margin-bottom:12px; max-height:96vh; border:1px solid var(--border); }
@@ -114,6 +120,9 @@
       background: linear-gradient(180deg, rgba(11,15,26,0.95) 0%, rgba(11,15,26,0.7) 100%);
       backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px);
       border-bottom:1px solid var(--border); z-index:50;
+      /* iOS safe area top */
+      padding-top: calc(16px + var(--safe-top));
+      -webkit-padding-top: calc(16px + var(--safe-top));
     }
     .app-header .brand { display:flex; align-items:center; gap:12px; }
     .app-header .brand .logo {
@@ -152,9 +161,12 @@
 
     /* ==================== MAIN CONTENT ==================== */
     .main-content {
-      flex:1; overflow-y:auto; padding:0 16px 100px;
+      flex:1; overflow-y:auto; padding:0 16px calc(var(--nav-height) + var(--safe-bottom) + 20px);
       scroll-behavior:smooth; -webkit-overflow-scrolling:touch;
       width:100%; max-width:100%;
+      -webkit-overflow-scrolling:touch;
+      /* iOS'ta overscrollbounce */
+      overscroll-behavior: contain;
     }
     .tab-page { display:none; animation:fadeSlide 0.4s cubic-bezier(0.16, 1, 0.3, 1); width:100%; }
     .tab-page.active { display:block; }
@@ -546,6 +558,8 @@
       position:absolute; bottom:0; left:0; right:0;
       height:calc(var(--nav-height) + var(--safe-bottom));
       padding-bottom:var(--safe-bottom); padding:0 12px var(--safe-bottom);
+      /* iOS home indicator desteği */
+      padding-top:8px;
       background: linear-gradient(0deg, rgba(7,11,20,0.98) 0%, rgba(7,11,20,0.85) 100%);
       border-top:1px solid var(--border);
       display:flex; align-items:stretch; justify-content:space-around; z-index:99;
@@ -833,6 +847,31 @@
     .participant-badge .name { margin-right:4px; }
 
     .section-title .actions .see-all:last-child { margin-left:0; }
+
+    /* iOS PWA Standalone Mode */
+    @media screen and (display-mode: standalone) {
+      html, body {
+        padding-top: env(safe-area-inset-top, 0px);
+      }
+      #app {
+        height:100vh;
+        height:-webkit-fill-available;
+        min-height:-webkit-fill-available;
+        border-radius:0;
+        box-shadow:none;
+      }
+      .app-header {
+        padding-top: calc(12px + env(safe-area-inset-top, 0px));
+      }
+      .main-content {
+        height:calc(100% - var(--nav-height));
+      }
+    }
+    @supports (-webkit-touch-callout: none) {
+      html, body { height:-webkit-fill-available; }
+      #app { height:-webkit-fill-available; min-height:-webkit-fill-available; }
+      body { display:block; }
+    }
 
     /* ==================== RESPONSIVE FIXES ==================== */
     @media (max-width:480px) {
@@ -2537,6 +2576,49 @@
     addNotification(`${type === 'approve' ? '✅' : '❌'} "${item.title}" için ${voterName} ${type === 'approve' ? 'onayladı' : 'reddetti'}.`);
   }
 
+
+  function calculateStandings(lig) {
+    if (!lig || !lig.matches || !lig.matches.length) return;
+    // Standings'i sıfırla
+    if (lig.standings) {
+      lig.standings.forEach(s => { s.o = 0; s.g = 0; s.b = 0; s.m = 0; s.p = 0; });
+    }
+    // Her maçtan puanları hesapla
+    lig.matches.forEach(match => {
+      if (!lig.standings) return;
+      const home = lig.standings.find(s => s.team === match.home);
+      const away = lig.standings.find(s => s.team === match.away);
+      if (home) {
+        home.o = (home.o || 0) + 1;
+        if (match.homeScore > match.awayScore) {
+          home.g = (home.g || 0) + 1;
+          home.p = (home.p || 0) + 3;
+        } else if (match.homeScore === match.awayScore) {
+          home.b = (home.b || 0) + 1;
+          home.p = (home.p || 0) + 1;
+        } else {
+          home.m = (home.m || 0) + 1;
+        }
+      }
+      if (away) {
+        away.o = (away.o || 0) + 1;
+        if (match.awayScore > match.homeScore) {
+          away.g = (away.g || 0) + 1;
+          away.p = (away.p || 0) + 3;
+        } else if (match.homeScore === match.awayScore) {
+          away.b = (away.b || 0) + 1;
+          away.p = (away.p || 0) + 1;
+        } else {
+          away.m = (away.m || 0) + 1;
+        }
+      }
+    });
+    // Standings'i puana göre sırala
+    if (lig.standings) {
+      lig.standings.sort((a, b) => (b.p || 0) - (a.p || 0) || (b.g || 0) - (a.g || 0) || ((a.g || 0) - (a.m || 0)) - ((b.g || 0) - (b.m || 0)));
+    }
+  }
+
   // ---------- ARENA ----------
   function renderArenaLigler() {
     const container = document.getElementById('arenaLigList');
@@ -2555,6 +2637,20 @@
           ${standings.map(s => `<tr><td class="team-name">${escapeHtml(s.team)}</td><td>${s.o||0}</td><td>${s.g||0}</td><td>${s.b||0}</td><td>${s.m||0}</td><td style="font-weight:800;color:var(--accent);">${s.p||0}</td></tr>`).join('')}
         </table>`;
       }
+      // Maç skorları gösterimi
+      let matchesHtml = '';
+      if (matches.length) {
+        matchesHtml = `<div style="margin-top:10px;"><div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:6px;">📅 Son Maçlar</div>`;
+        matchesHtml += matches.slice(-5).reverse().map(m => `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 8px;background:var(--bg-elevated);border-radius:8px;margin-bottom:4px;font-size:11px;">
+            <span style="color:var(--text-secondary);font-weight:600;flex:1;text-align:right;">${escapeHtml(m.home)}</span>
+            <span style="font-weight:800;color:var(--accent);padding:0 8px;">${m.homeScore || 0} - ${m.awayScore || 0}</span>
+            <span style="color:var(--text-secondary);font-weight:600;flex:1;text-align:left;">${escapeHtml(m.away)}</span>
+          </div>
+        `).join('');
+        matchesHtml += `</div>`;
+      }
+
       return `
       <div class="card" style="border-left:3px solid var(--gold);" onclick="showDetail('arenaLigler','${lig.id}')">
         <div class="flex-between">
@@ -2563,6 +2659,7 @@
         </div>
         <div class="fs-12 text-muted mt-1">${escapeHtml(lig.detail || '')}</div>
         ${tableHtml}
+        ${matchesHtml}
         ${renderParticipants(lig.participants)}
         <div class="card-actions" onclick="event.stopPropagation();">
           <button class="btn btn-primary btn-sm" onclick="openMatchModal('${lig.id}')">⚽ Maç Ekle</button>
@@ -2604,15 +2701,19 @@
       const home = document.getElementById('m_home').value;
       const away = document.getElementById('m_away').value;
       if (!home || !away || home === away) { showToast('Geçerli takımlar seçin.', 'fa-exclamation-circle'); return; }
+      const homeScore = Number(document.getElementById('m_homeScore').value) || 0;
+      const awayScore = Number(document.getElementById('m_awayScore').value) || 0;
       if (!lig.matches) lig.matches = [];
       lig.matches.push({
         id: generateId(), home, away,
-        homeScore: Number(document.getElementById('m_homeScore').value) || 0,
-        awayScore: Number(document.getElementById('m_awayScore').value) || 0,
+        homeScore, awayScore,
         date: document.getElementById('m_date').value || new Date().toLocaleDateString('tr-TR')
       });
-      saveData();
-      addNotification(`⚽ ${home} vs ${away} maçı eklendi!`);
+      // Maç skorundan standings'i otomatik hesapla
+      calculateStandings(lig);
+      lig.updatedAt = new Date().toISOString();
+      saveGroupData();
+      addNotification(`⚽ ${home} ${homeScore} - ${awayScore} ${away} maçı eklendi ve puan durumu güncellendi!`);
       closeModal();
     };
     modal.classList.add('open');
@@ -2643,7 +2744,8 @@
       const duplicate = lig.standings.some(standing => String(standing.team || '').toLocaleLowerCase('tr-TR') === team.toLocaleLowerCase('tr-TR'));
       if (duplicate) return showToast('Bu takım zaten ligde var', 'fa-exclamation-circle');
       lig.standings.push({ id: generateId(), team, o: 0, g: 0, b: 0, m: 0, p: 0 });
-      saveData();
+      lig.updatedAt = new Date().toISOString();
+      saveGroupData();
       addNotification(`📊 "${team}" takımı eklendi.`);
       closeModal();
     };
@@ -2691,7 +2793,8 @@
         return showToast('Bu takım zaten ligde var', 'fa-exclamation-circle');
       }
       lig.standings.push({ id: generateId(), team, o:0, g:0, b:0, m:0, p:0 });
-      saveData();
+      lig.updatedAt = new Date().toISOString();
+      saveGroupData();
       openStandingsModal(ligId);
       addNotification(`📊 "${team}" takımı eklendi.`);
     };
