@@ -923,7 +923,7 @@
       </div>
       <div id="kesfetList"></div>
       <div class="section-title mt-3">
-        <h3><i class="fas fa-share-nodes"></i> Grup Aktivite <span class="count-badge" id="friendSharedCount">0</span></h3>
+        <h3><i class="fas fa-user-friends"></i> Arkadaşlardan Gelenler <span class="count-badge" id="friendSharedCount">0</span></h3>
       </div>
       <div id="friendActivityList"></div>
     </div>
@@ -1136,10 +1136,6 @@
   let breathingInterval = null;
   let friendRequests = {}; // gelen arkadaş istekleri
   let friendRequestListener = null;
-  // Grup verisi - tüm arkadaşlar aynı veriyi görsün diye ortak bir node
-  let groupData = null;
-  let groupDataListener = null;
-  let currentGroupId = null;
 
   if (firebaseConfigured) {
     try {
@@ -1343,8 +1339,6 @@
     friendsData = {};
     friendships = {};
     friendRequests = {};
-    groupData = null;
-    currentGroupId = null;
     data = defaultData();
     const userDisplay = document.getElementById('userDisplay');
     if (userDisplay) userDisplay.style.display = 'none';
@@ -1412,113 +1406,6 @@
     return db.ref().update(updates);
   }
 
-
-  // ================================================================
-  // GRUP VERİSİ SİSTEMİ
-  // ================================================================
-  function getGroupId() {
-    // Grup ID'si: kullanıcının UID'si + ilk arkadaşının UID'si (alfabetik sıralı)
-    const friendIds = Object.keys(friendships).sort();
-    if (friendIds.length === 0) return currentUser ? currentUser.uid : 'solo';
-    const allIds = [currentUser.uid, ...friendIds].sort();
-    return 'grp_' + allIds.join('_');
-  }
-
-  function getGroupDataRef() {
-    if (!db || !currentGroupId) return null;
-    return db.ref('groupData/' + currentGroupId);
-  }
-
-  function loadGroupData() {
-    if (!currentUser || !db || !firebaseConfigured) return;
-    
-    // Grup ID'yi hesapla
-    currentGroupId = getGroupId();
-    if (groupDataListener) {
-      db.ref('groupData/' + (currentGroupId || '')).off('value', groupDataListener);
-    }
-
-    // Mevcut localStorage'dan yükle (hızlı başlangıç)
-    const localGroup = JSON.parse(localStorage.getItem('dostos_groupdata') || '{}');
-    if (localGroup[currentGroupId]) {
-      groupData = { ...defaultData(), ...localGroup[currentGroupId] };
-    } else {
-      groupData = defaultData();
-    }
-
-    // Firebase'den dinle
-    const ref = db.ref('groupData/' + currentGroupId);
-    groupDataListener = (snapshot) => {
-      const gd = snapshot.val();
-      if (gd) {
-        groupData = { ...defaultData(), ...gd };
-      } else {
-        groupData = defaultData();
-      }
-      // LocalStorage'a kaydet
-      const localGroup = JSON.parse(localStorage.getItem('dostos_groupdata') || '{}');
-      localGroup[currentGroupId] = groupData;
-      localStorage.setItem('dostos_groupdata', JSON.stringify(localGroup));
-      renderAll();
-    };
-    ref.on('value', groupDataListener);
-  }
-
-  function saveGroupData() {
-    if (!currentUser || !db || !firebaseConfigured || !currentGroupId) return;
-    
-    // Grup verisini Firebase'e kaydet
-    const ref = db.ref('groupData/' + currentGroupId);
-    ref.update(groupData)
-      .catch((error) => {
-        console.warn('Grup verisi kaydetme hatası:', error);
-      });
-    
-    // LocalStorage'a kaydet
-    const localGroup = JSON.parse(localStorage.getItem('dostos_groupdata') || '{}');
-    localGroup[currentGroupId] = groupData;
-    localStorage.setItem('dostos_groupdata', JSON.stringify(localGroup));
-    
-    renderAll();
-    updateBadges();
-    updateNotifBadge();
-    updateCounts();
-  }
-
-  function addToGroup(type, item) {
-    // Grup verisine öğe ekle
-    if (!groupData[type]) groupData[type] = [];
-    groupData[type].push(item);
-    groupData._updatedAt = new Date().toISOString();
-    saveGroupData();
-  }
-
-  function removeFromGroup(type, id) {
-    if (!groupData[type]) return;
-    const idx = groupData[type].findIndex(i => i.id === id);
-    if (idx !== -1) {
-      groupData[type].splice(idx, 1);
-      groupData._updatedAt = new Date().toISOString();
-      saveGroupData();
-    }
-  }
-
-  function updateInGroup(type, id, updates) {
-    if (!groupData[type]) return;
-    const item = groupData[type].find(i => i.id === id);
-    if (item) {
-      Object.assign(item, updates);
-      item.updatedAt = new Date().toISOString();
-      groupData._updatedAt = new Date().toISOString();
-      saveGroupData();
-    }
-  }
-
-  function getGroupWallet() {
-    if (!groupData || !groupData.expenses) return 0;
-    return groupData.expenses.reduce((s, e) => s + (e.type === 'gelir' ? e.amount : -e.amount), 0);
-  }
-
   function loadUserData() {
     if (!currentUser) return;
 
@@ -1540,7 +1427,6 @@
           const loadedData = snapshot.val();
           data = loadedData ? { ...defaultData(), ...loadedData } : defaultData();
           loadFriendsData();
-          loadGroupData();
           renderAll();
           updateBadges();
           updateNotifBadge();
@@ -1562,7 +1448,6 @@
       const loadedData = allData[currentUser.uid];
       data = loadedData ? { ...defaultData(), ...loadedData } : defaultData();
       loadFriendsData();
-      loadGroupData();
       renderAll();
       updateBadges();
       updateNotifBadge();
@@ -1590,13 +1475,9 @@
     if (friendRequestListener && currentUser && db) {
       db.ref('friendRequests/' + currentUser.uid).off('value', friendRequestListener);
     }
-    if (groupDataListener && currentUser && db && currentGroupId) {
-      db.ref('groupData/' + currentGroupId).off('value', groupDataListener);
-    }
     Object.values(friendDataListeners).forEach(({ ref, callback }) => ref.off('value', callback));
     friendshipListener = null;
     friendRequestListener = null;
-    groupDataListener = null;
     friendDataListeners = {};
   }
 
@@ -1645,8 +1526,6 @@
             friendDataRef.on('value', callback);
           }
         });
-        // Arkadaşlık değiştiğinde grup verisini yeniden yükle
-        loadGroupData();
         renderAll();
       };
 
@@ -2036,11 +1915,10 @@
     document.getElementById('modalCloseBtn').textContent = 'Kapat';
     document.getElementById('modalCloseBtn').onclick = closeModal;
 
-    const gd = groupData || {};
-    const totalItems = (gd.kesfet || []).length + (gd.arenaLigler || []).length + (gd.challenges || []).length +
-      (gd.expenses || []).length + (gd.bbqs || []).length + (gd.projects || []).length + (gd.feed || []).length +
-      (gd.music || []).length + (gd.games || []).length + (gd.giftfunds || []).length + (gd.albums || []).length +
-      (gd.inventory || []).length + (gd.debts || []).length;
+    const totalItems = data.kesfet.length + data.arenaLigler.length + data.challenges.length +
+      data.expenses.length + data.bbqs.length + data.projects.length + data.feed.length +
+      data.music.length + data.games.length + data.giftfunds.length + data.albums.length +
+      data.inventory.length + data.debts.length;
     const friendCount = Object.keys(friendships).length;
     const body = document.getElementById('modalBody');
     body.innerHTML = `
@@ -2048,14 +1926,14 @@
       <div class="detail-item"><span class="label">Arkadaş Kodu</span><span class="value" style="font-size:12px;letter-spacing:.5px;">${escapeHtml(userData?.friendCode || '-')}</span></div>
       <div class="detail-item"><span class="label">Arkadaşlar</span><span class="value">${friendCount}</span></div>
       <div class="detail-item"><span class="label">Toplam Öğe</span><span class="value">${totalItems}</span></div>
-      <div class="detail-item"><span class="label">Ligler</span><span class="value">${(gd.arenaLigler || []).length}</span></div>
-      <div class="detail-item"><span class="label">Meydan Okuma</span><span class="value">${(gd.challenges || []).length}</span></div>
-      <div class="detail-item"><span class="label">İşlemler</span><span class="value">${(gd.expenses || []).length}</span></div>
-      <div class="detail-item"><span class="label">Mangal</span><span class="value">${(gd.bbqs || []).length}</span></div>
-      <div class="detail-item"><span class="label">Proje</span><span class="value">${(gd.projects || []).length}</span></div>
-      <div class="detail-item"><span class="label">Albüm</span><span class="value">${(gd.albums || []).length}</span></div>
-      <div class="detail-item"><span class="label">Ekipman</span><span class="value">${(gd.inventory || []).length}</span></div>
-      <div class="detail-item"><span class="label">Borç</span><span class="value">${(gd.debts || []).length}</span></div>
+      <div class="detail-item"><span class="label">Ligler</span><span class="value">${data.arenaLigler.length}</span></div>
+      <div class="detail-item"><span class="label">Meydan Okuma</span><span class="value">${data.challenges.length}</span></div>
+      <div class="detail-item"><span class="label">İşlemler</span><span class="value">${data.expenses.length}</span></div>
+      <div class="detail-item"><span class="label">Mangal</span><span class="value">${data.bbqs.length}</span></div>
+      <div class="detail-item"><span class="label">Proje</span><span class="value">${data.projects.length}</span></div>
+      <div class="detail-item"><span class="label">Albüm</span><span class="value">${data.albums.length}</span></div>
+      <div class="detail-item"><span class="label">Ekipman</span><span class="value">${data.inventory.length}</span></div>
+      <div class="detail-item"><span class="label">Borç</span><span class="value">${data.debts.length}</span></div>
       <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">
         <button class="btn btn-primary btn-sm" onclick="showFriendModal()">👥 Arkadaş Yönetimi</button>
         <button class="btn btn-outline btn-sm" onclick="exportAllData()">📤 Veriyi Dışa Aktar</button>
@@ -2105,17 +1983,6 @@
     if (!confirm('Tüm veriler silinecek. Emin misiniz?')) return;
     data = defaultData();
     saveData();
-    if (groupData && currentGroupId && db && firebaseConfigured) {
-      groupData = defaultData();
-      db.ref('groupData/' + currentGroupId).set(defaultData())
-        .then(() => {
-          const localGroup = JSON.parse(localStorage.getItem('dostos_groupdata') || '{}');
-          localGroup[currentGroupId] = groupData;
-          localStorage.setItem('dostos_groupdata', JSON.stringify(localGroup));
-          renderAll();
-        })
-        .catch(err => console.warn('Grup verisi sıfırlama hatası:', err));
-    }
     addNotification('🗑️ Tüm veriler sıfırlandı.');
   }
 
@@ -2127,11 +1994,10 @@
     document.getElementById('modalCloseBtn').textContent = 'Kapat';
     document.getElementById('modalCloseBtn').onclick = closeModal;
 
-    const history = (groupData && groupData.history) || [];
-    if (!history.length) {
+    if (!data.history.length) {
       document.getElementById('modalBody').innerHTML = `<div class="empty-state"><i class="fas fa-history"></i>Geçmiş yok.</div>`;
     } else {
-      document.getElementById('modalBody').innerHTML = history.slice().reverse().map(h => {
+      document.getElementById('modalBody').innerHTML = data.history.slice().reverse().map(h => {
         const approved = (h.votes || []).filter(v => v.vote === 'onayladi');
         const rejected = (h.votes || []).filter(v => v.vote === 'reddetti');
         const resultColor = h.result === 'Onaylandı' ? 'var(--green)' : 'var(--red)';
@@ -2153,22 +2019,21 @@
   // COUNTS
   // ================================================================
   function updateCounts() {
-    const gd = groupData || {};
-    document.getElementById('kesfetCount').textContent = (gd.kesfet || []).length;
-    document.getElementById('arenaLigCount').textContent = (gd.arenaLigler || []).length;
-    document.getElementById('challengeCount').textContent = (gd.challenges || []).length;
-    document.getElementById('leaderboardCount').textContent = (gd.leaderboard || []).length;
-    document.getElementById('expenseCount').textContent = (gd.expenses || []).length;
-    document.getElementById('subscriptionCount').textContent = (gd.subscriptions || []).length;
-    document.getElementById('giftfundCount').textContent = (gd.giftfunds || []).length;
-    document.getElementById('bbqCount').textContent = (gd.bbqs || []).length;
-    document.getElementById('projectCount').textContent = (gd.projects || []).length;
-    document.getElementById('feedCount').textContent = (gd.feed || []).length;
-    document.getElementById('musicCount').textContent = (gd.music || []).length;
-    document.getElementById('gameCount').textContent = (gd.games || []).length;
-    document.getElementById('albumCount').textContent = (gd.albums || []).length;
-    document.getElementById('inventoryCount').textContent = (gd.inventory || []).length;
-    document.getElementById('debtCount').textContent = (gd.debts || []).length;
+    document.getElementById('kesfetCount').textContent = data.kesfet.length;
+    document.getElementById('arenaLigCount').textContent = data.arenaLigler.length;
+    document.getElementById('challengeCount').textContent = data.challenges.length;
+    document.getElementById('leaderboardCount').textContent = data.leaderboard.length;
+    document.getElementById('expenseCount').textContent = data.expenses.length;
+    document.getElementById('subscriptionCount').textContent = data.subscriptions.length;
+    document.getElementById('giftfundCount').textContent = data.giftfunds.length;
+    document.getElementById('bbqCount').textContent = data.bbqs.length;
+    document.getElementById('projectCount').textContent = data.projects.length;
+    document.getElementById('feedCount').textContent = data.feed.length;
+    document.getElementById('musicCount').textContent = data.music.length;
+    document.getElementById('gameCount').textContent = data.games.length;
+    document.getElementById('albumCount').textContent = data.albums.length;
+    document.getElementById('inventoryCount').textContent = data.inventory.length;
+    document.getElementById('debtCount').textContent = data.debts.length;
   }
 
   // ================================================================
@@ -2176,12 +2041,11 @@
   // ================================================================
   function renderAlbums() {
     const container = document.getElementById('albumGrid');
-    const albums = (groupData && groupData.albums) || [];
-    if (!albums.length) {
+    if (!data.albums.length) {
       container.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><i class="fas fa-images"></i>Henüz albüm yok.<div class="hint">Yeni bir albüm oluşturun ve anılarınızı biriktirin.</div></div>`;
       return;
     }
-    container.innerHTML = albums.map((album) => {
+    container.innerHTML = data.albums.map((album) => {
       const cover = album.photos && album.photos.length ? album.photos[0] : null;
       return `
         <div class="album-item" onclick="openAlbumModal('${album.id}')">
@@ -2195,7 +2059,7 @@
   }
 
   function openAlbumModal(albumId) {
-    const album = findGroupItem('albums', albumId);
+    const album = data.albums.find(a => a.id === albumId);
     if (!album) return;
     currentAlbumId = albumId;
     const modal = document.getElementById('genericModal');
@@ -2233,7 +2097,7 @@
   document.getElementById('albumFileInput').addEventListener('change', function(e) {
     const files = e.target.files;
     if (!files.length || !currentAlbumId) return;
-    const album = findGroupItem('albums', currentAlbumId);
+    const album = data.albums.find(a => a.id === currentAlbumId);
     if (!album) return;
     if (!album.photos) album.photos = [];
     let loaded = 0;
@@ -2243,8 +2107,7 @@
         album.photos.push(ev.target.result);
         loaded++;
         if (loaded === files.length) {
-          album.updatedAt = new Date().toISOString();
-          saveGroupData();
+          saveData();
           openAlbumModal(currentAlbumId);
           addNotification(`📸 ${loaded} fotoğraf "${album.name}" albümüne eklendi.`);
         }
@@ -2255,28 +2118,28 @@
   });
 
   function removePhotoFromAlbum(albumId, photoIdx) {
-    const album = findGroupItem('albums', albumId);
+    const album = data.albums.find(a => a.id === albumId);
     if (!album || !album.photos) return;
     if (!confirm('Bu fotoğrafı silmek istediğinize emin misiniz?')) return;
     album.photos.splice(photoIdx, 1);
-    album.updatedAt = new Date().toISOString();
-    saveGroupData();
+    saveData();
     openAlbumModal(albumId);
     addNotification('🗑️ Fotoğraf silindi.');
   }
 
   function deleteAlbum(albumId) {
     if (!confirm('Bu albümü ve içindeki tüm fotoğrafları silmek istediğinize emin misiniz?')) return;
-    const album = findGroupItem('albums', albumId);
-    if (album) {
-      const name = album.name;
-      removeFromGroup('albums', albumId);
+    const idx = data.albums.findIndex(a => a.id === albumId);
+    if (idx !== -1) {
+      const name = data.albums[idx].name;
+      data.albums.splice(idx, 1);
+      saveData();
       addNotification(`🗑️ "${name}" albümü silindi.`);
     }
   }
 
   function exportSingleAlbum(albumId) {
-    const album = findGroupItem('albums', albumId);
+    const album = data.albums.find(a => a.id === albumId);
     if (!album || !album.photos || !album.photos.length) {
       showToast('Henüz fotoğraf yok.', 'fa-exclamation-circle');
       return;
@@ -2340,42 +2203,23 @@
     return myVote ? myVote.vote : null;
   }
 
-  // Grup verisinden öğe bul
-  function findGroupItem(type, id) {
-    if (groupData && groupData[type]) {
-      return groupData[type].find(i => i.id === id);
-    }
-    return null;
-  }
-
   function renderKesfet() {
     const container = document.getElementById('kesfetList');
     const search = document.getElementById('kesfetSearch').value.toLowerCase();
-    
-    // Grup verisinden önerileri al
-    let items = (groupData && groupData.kesfet) || [];
-    
-    // Filtrele
+    let items = data.kesfet;
     if (search) items = items.filter(i => (i.title || '').toLowerCase().includes(search) || (i.location || '').toLowerCase().includes(search));
-    
     if (!items.length) {
       container.innerHTML = `<div class="empty-state"><i class="fas fa-plus-circle"></i>Henüz öneri yok.<div class="hint">"+ Ekle" ile yeni bir aktivite planlayın veya 🎲 ile rastgele öneri alın.</div></div>`;
-      document.getElementById('kesfetCount').textContent = '0';
       return;
     }
-    document.getElementById('kesfetCount').textContent = items.length;
-    
     let html = items.map(item => {
       const myVote = getMyVote(item);
       const approveActive = myVote === 'onayladi' ? 'style="background:var(--green);color:#fff;border-color:var(--green);"' : '';
       const skipActive = myVote === 'reddetti' ? 'style="background:var(--red);color:#fff;border-color:var(--red);"' : '';
       const approveIcon = myVote === 'onayladi' ? '<i class="fas fa-check-circle"></i>' : '<i class="fas fa-check"></i>';
       const skipIcon = myVote === 'reddetti' ? '<i class="fas fa-times-circle"></i>' : '<i class="fas fa-times"></i>';
-      const createdBy = item.createdBy || '';
-      const creatorHtml = createdBy ? `<div style="font-size:10px;font-weight:700;color:var(--accent);margin-bottom:4px;"><i class="fas fa-user"></i> ${escapeHtml(createdBy)}</div>` : '';
       return `
       <div class="vote-card" onclick="showKesfetDetail('${item.id}')">
-        ${creatorHtml}
         <div class="vote-title">${escapeHtml(item.title)}</div>
         <div class="vote-details">
           <span><i class="far fa-calendar"></i> ${escapeHtml(item.date || 'Bugün')}</span>
@@ -2396,6 +2240,41 @@
       </div>
     `;
     }).join('');
+
+    // Arkadaşların önerilerini de göster
+    const friendItems = [];
+    Object.entries(friendsData).forEach(([fid, fdata]) => {
+      if (fdata && fdata.kesfet && fdata.kesfet.length) {
+        const friendName = fdata._name || fid;
+        fdata.kesfet.forEach(fitem => {
+          if (!search || (fitem.title || '').toLowerCase().includes(search) || (fitem.location || '').toLowerCase().includes(search)) {
+            friendItems.push({ ...fitem, _friendName: friendName, _friendId: fid });
+          }
+        });
+      }
+    });
+
+    if (friendItems.length) {
+      html += `<div style="margin:16px 0 10px;font-size:13px;font-weight:700;color:var(--text-secondary);display:flex;align-items:center;gap:8px;">
+        <i class="fas fa-user-friends" style="color:var(--blue);"></i> Arkadaşların Önerileri
+      </div>`;
+      html += friendItems.map(fitem => {
+        const approved = (fitem.votes || []).filter(v => v.vote === 'onayladi');
+        const rejected = (fitem.votes || []).filter(v => v.vote === 'reddetti');
+        return `
+        <div class="vote-card" style="border-left-color:var(--blue);opacity:0.9;">
+          <div style="font-size:10px;font-weight:700;color:var(--blue);margin-bottom:4px;"><i class="fas fa-user"></i> ${escapeHtml(fitem._friendName)}'nin önerisi</div>
+          <div class="vote-title">${escapeHtml(fitem.title)}</div>
+          <div class="vote-details">
+            <span><i class="far fa-calendar"></i> ${escapeHtml(fitem.date || 'Bugün')}</span>
+            <span><i class="fas fa-map-pin"></i> ${escapeHtml(fitem.location || 'Belirtilmemiş')}</span>
+            <span><i class="fas fa-lira-sign"></i> ${escapeHtml(fitem.budget || 'Ücretsiz')}</span>
+          </div>
+          ${renderVoteBadges(fitem.votes)}
+        </div>
+        `;
+      }).join('');
+    }
 
     container.innerHTML = html;
   }
@@ -2427,13 +2306,48 @@
     const count = document.getElementById('friendSharedCount');
     if (!container || !count) return;
 
-    // Artık grup verisinde tüm öneriler görünüyor, bu bölümde sadece aktivite akışı gösterelim
-    count.textContent = '0';
-    container.innerHTML = `<div class="empty-state" style="padding:12px 0;"><i class="fas fa-share-nodes"></i>Tüm veriler grup bazlı paylaşılmaktadır.<div class="hint">Arkadaşlarınla ortak öneriler, kasa ve ligleri Keşfet, Arena ve Kasa sekmelerinde görebilirsin.</div></div>`;
+    const shareableCollections = ['kesfet', 'arenaLigler', 'challenges', 'leaderboard', 'expenses', 'debts', 'subscriptions', 'giftfunds', 'bbqs', 'projects', 'inventory', 'feed', 'music', 'games', 'albums'];
+    const items = [];
+    Object.entries(friendsData).forEach(([friendId, friendData]) => {
+      shareableCollections.forEach((type) => {
+        if (!Array.isArray(friendData[type])) return;
+        friendData[type].forEach((item) => {
+          const view = sharedItemPresentation(type, item);
+          items.push({
+            friendId,
+            friendName: friendData._name || friendships[friendId]?.displayName || 'Arkadaş',
+            type,
+            item,
+            view,
+            changedAt: item.updatedAt || item.createdAt || friendData._updatedAt || ''
+          });
+        });
+      });
+    });
+
+    items.sort((a, b) => String(b.changedAt).localeCompare(String(a.changedAt)));
+    count.textContent = items.length;
+    if (!items.length) {
+      container.innerHTML = `<div class="empty-state"><i class="fas fa-share-nodes"></i>Henüz arkadaş paylaşımı yok.<div class="hint">Arkadaşın bir içerik eklediğinde burada otomatik görünür.</div></div>`;
+      return;
+    }
+
+    container.innerHTML = items.slice(0, 50).map(({ friendName, view }) => `
+      <div class="card" style="border-left:3px solid var(--blue);cursor:default;">
+        <div style="font-size:10px;font-weight:700;color:var(--blue);margin-bottom:5px;"><i class="fas fa-user"></i> ${escapeHtml(friendName)} paylaştı · ${escapeHtml(view.label)}</div>
+        <div class="card-row">
+          <div class="card-icon blue"><i class="fas ${escapeHtml(view.icon)}"></i></div>
+          <div class="card-body">
+            <div class="title">${escapeHtml(view.title || 'Yeni içerik')}</div>
+            ${view.detail ? `<div class="desc">${escapeHtml(view.detail)}</div>` : ''}
+          </div>
+        </div>
+      </div>
+    `).join('');
   }
 
   function showKesfetDetail(id) {
-    const item = (groupData && groupData.kesfet) ? groupData.kesfet.find(i => i.id === id) : null;
+    const item = data.kesfet.find(i => i.id === id);
     if (!item) return;
     const modal = document.getElementById('genericModal');
     document.getElementById('modalTitle').innerHTML = '<i class="fas fa-compass text-accent"></i> Öneri Detayı';
@@ -2499,12 +2413,13 @@
       {title: "🧗 Tırmanış", location: "Tırmanış Duvarı", budget: "250 TL/kişi"}
     ];
     const s = suggestions[Math.floor(Math.random() * suggestions.length)];
-    addToGroup('kesfet', {...s, id: generateId(), date: new Date().toLocaleDateString('tr-TR'), participants: [], createdBy: getDisplayName(), createdAt: new Date().toISOString()});
+    data.kesfet.push({...s, id: generateId(), date: new Date().toLocaleDateString('tr-TR'), participants: []});
+    saveData();
     addNotification(`🎲 Rastgele öneri eklendi: ${s.title}`);
   }
 
   function handleVote(type, id) {
-    const item = (groupData && groupData.kesfet) ? groupData.kesfet.find(i => i.id === id) : null;
+    const item = data.kesfet.find(i => i.id === id);
     if (!item) return;
     
     // Mevcut kullanıcı adını al
@@ -2523,29 +2438,26 @@
     
     // Geçmişe de ekle (referans için)
     const resultText = type === 'approve' ? 'Onaylandı' : 'Geçildi';
-    if (!groupData.history) groupData.history = [];
-    const existingHistory = groupData.history.find(h => h.id === id);
+    const existingHistory = data.history.find(h => h.id === id);
     if (existingHistory) {
       existingHistory.result = resultText;
       existingHistory.votes = item.votes;
     } else {
-      groupData.history.push({ id, title: item.title, date: item.date, result: resultText, votes: item.votes });
+      data.history.push({ id, title: item.title, date: item.date, result: resultText, votes: item.votes });
     }
     
-    item.updatedAt = new Date().toISOString();
-    saveGroupData();
+    saveData();
     addNotification(`${type === 'approve' ? '✅' : '❌'} "${item.title}" için ${voterName} ${type === 'approve' ? 'onayladı' : 'reddetti'}.`);
   }
 
   // ---------- ARENA ----------
   function renderArenaLigler() {
     const container = document.getElementById('arenaLigList');
-    const ligs = (groupData && groupData.arenaLigler) || [];
-    if (!ligs.length) {
+    if (!data.arenaLigler.length) {
       container.innerHTML = `<div class="empty-state"><i class="fas fa-trophy"></i>Lig yok.<div class="hint">Hemen bir lig oluşturun ve turnuvaya başlayın!</div></div>`;
       return;
     }
-    container.innerHTML = ligs.map(lig => {
+    container.innerHTML = data.arenaLigler.map(lig => {
       const matches = lig.matches || [];
       const standings = lig.standings || [];
       let tableHtml = '';
@@ -2579,7 +2491,7 @@
   }
 
   function openMatchModal(ligId) {
-    const lig = findGroupItem('arenaLigler', ligId);
+    const lig = data.arenaLigler.find(l => l.id === ligId);
     if (!lig) return;
     const modal = document.getElementById('genericModal');
     document.getElementById('modalTitle').innerHTML = `<i class="fas fa-futbol text-accent"></i> ${escapeHtml(lig.name)} - Maç Ekle`;
@@ -2619,7 +2531,7 @@
   }
 
   function openTeamModal(ligId) {
-    const lig = findGroupItem('arenaLigler', ligId);
+    const lig = data.arenaLigler.find(l => l.id === ligId);
     if (!lig) return;
     const modal = document.getElementById('genericModal');
     document.getElementById('modalTitle').innerHTML = `<i class="fas fa-users text-accent"></i> ${escapeHtml(lig.name)} - Takım Ekle`;
@@ -2651,7 +2563,7 @@
   }
 
   function openStandingsModal(ligId) {
-    const lig = findGroupItem('arenaLigler', ligId);
+    const lig = data.arenaLigler.find(l => l.id === ligId);
     if (!lig) return;
     const modal = document.getElementById('genericModal');
     document.getElementById('modalTitle').innerHTML = `<i class="fas fa-chart-line text-accent"></i> ${escapeHtml(lig.name)} - Puan Durumu`;
@@ -2699,16 +2611,15 @@
   }
 
   function removeStanding(ligId, idx) {
-    const lig = findGroupItem('arenaLigler', ligId);
+    const lig = data.arenaLigler.find(l => l.id === ligId);
     if (!lig || !lig.standings) return;
     lig.standings.splice(idx, 1);
-    lig.updatedAt = new Date().toISOString();
-    saveGroupData();
+    saveData();
     openStandingsModal(ligId);
   }
 
   function saveStandings(ligId) {
-    const lig = findGroupItem('arenaLigler', ligId);
+    const lig = data.arenaLigler.find(l => l.id === ligId);
     if (!lig || !lig.standings) return;
     lig.standings.forEach((s, idx) => {
       s.o = Number(document.getElementById(`s_o_${idx}`).value) || 0;
@@ -2717,20 +2628,18 @@
       s.m = Number(document.getElementById(`s_m_${idx}`).value) || 0;
       s.p = Number(document.getElementById(`s_p_${idx}`).value) || 0;
     });
-    lig.updatedAt = new Date().toISOString();
-    saveGroupData();
+    saveData();
     addNotification('📊 Puan durumu güncellendi.');
     openStandingsModal(ligId);
   }
 
   function renderChallenges() {
     const container = document.getElementById('challengeList');
-    const challenges = (groupData && groupData.challenges) || [];
-    if (!challenges.length) {
+    if (!data.challenges.length) {
       container.innerHTML = `<div class="empty-state"><i class="fas fa-bolt"></i>Meydan okuma yok.<div class="hint">Arkadaşlarına meydan oku, rekabet başlasın!</div></div>`;
       return;
     }
-    container.innerHTML = challenges.map(ch => {
+    container.innerHTML = data.challenges.map(ch => {
       let targetText = ch.target ? `🎯 ${escapeHtml(ch.target)}` : '';
       const maxVal = ch.participants && ch.participants.length ? Math.max(...ch.participants.filter(p => p.value).map(p => parseFloat(p.value) || 0)) : 0;
       return `
@@ -2759,7 +2668,7 @@
   }
 
   function updateChallengeProgress(id) {
-    const ch = findGroupItem('challenges', id);
+    const ch = data.challenges.find(c => c.id === id);
     if (!ch) return;
     const name = prompt('Katılımcı ismi:');
     if (!name) return;
@@ -2770,13 +2679,12 @@
     if (existing) existing.value = value;
     else ch.participants.push({ name, status: 'coming', value });
     ch.progress = ch.participants.map(p => `${p.name} ${p.value || '0'}`).join(' · ');
-    ch.updatedAt = new Date().toISOString();
-    saveGroupData();
+    saveData();
     addNotification(`📊 "${ch.title}" ilerlemesi güncellendi: ${name} → ${value}`);
   }
 
   function declareChallengeWinner(id) {
-    const ch = findGroupItem('challenges', id);
+    const ch = data.challenges.find(c => c.id === id);
     if (!ch || !ch.participants || !ch.participants.length) {
       showToast('Henüz katılımcı yok veya ilerleme girilmemiş.', 'fa-exclamation-circle');
       return;
@@ -2788,27 +2696,25 @@
     }
     const winner = sorted[0];
     addNotification(`🏆 "${ch.title}" kazananı: ${winner.name} (${winner.value})!`);
-    if (!groupData.leaderboard) groupData.leaderboard = [];
-    const lb = groupData.leaderboard.find(p => p.name === winner.name);
+    const lb = data.leaderboard.find(p => p.name === winner.name);
     if (lb) {
       lb.score += 50;
+      saveData();
     } else {
-      groupData.leaderboard.push({ id: generateId(), name: winner.name, score: 50, avatar: winner.name[0] });
+      data.leaderboard.push({ id: generateId(), name: winner.name, score: 50, avatar: winner.name[0] });
+      saveData();
     }
-    ch.updatedAt = new Date().toISOString();
-    saveGroupData();
   }
 
   function renderLeaderboard() {
     const podiumContainer = document.getElementById('leaderboardPodium');
     const container = document.getElementById('leaderboardList');
-    const lb = (groupData && groupData.leaderboard) || [];
-    if (!lb.length) {
+    if (!data.leaderboard.length) {
       podiumContainer.innerHTML = '';
       container.innerHTML = `<div class="empty-state" style="padding:20px 0;"><i class="fas fa-users"></i>Lider tablosu boş.<div class="hint">Oyuncu ekleyerek rekabeti başlatın!</div></div>`;
       return;
     }
-    const sorted = [...lb].sort((a, b) => b.score - a.score);
+    const sorted = [...data.leaderboard].sort((a, b) => b.score - a.score);
     const ranks = ['gold', 'silver', 'bronze'];
 
     // Podium
@@ -2847,13 +2753,12 @@
   // ---------- KASA ----------
   function renderExpenses() {
     const container = document.getElementById('expenseList');
-    const expenses = (groupData && groupData.expenses) || [];
-    if (!expenses.length) {
+    if (!data.expenses.length) {
       container.innerHTML = `<div class="empty-state"><i class="fas fa-coins"></i>Hiç işlem yok.<div class="hint">Grup harcamalarını takip etmeye başlayın.</div></div>`;
       document.getElementById('expenseChart').innerHTML = '';
       return;
     }
-    container.innerHTML = expenses.map(exp => `
+    container.innerHTML = data.expenses.map(exp => `
       <div class="expense-item" onclick="showDetail('expenses','${exp.id}')">
         <div class="card-icon ${exp.type === 'gelir' ? 'green' : 'red'}" style="width:38px;height:38px;font-size:14px;">
           <i class="fas ${exp.type === 'gelir' ? 'fa-arrow-up' : 'fa-arrow-down'}"></i>
@@ -2875,7 +2780,7 @@
 
   function renderExpenseChart() {
     const container = document.getElementById('expenseChart');
-    const recent = ((groupData && groupData.expenses) || []).slice(-5);
+    const recent = data.expenses.slice(-5);
     if (!recent.length) { container.innerHTML = ''; return; }
     const maxAmount = Math.max(...recent.map(e => e.amount));
     container.innerHTML = recent.map((e, i) => {
@@ -2891,22 +2796,21 @@
   function renderDebts() {
     const container = document.getElementById('debtList');
     const summary = document.getElementById('debtSummary');
-    const debts = (groupData && groupData.debts) || [];
-    if (!debts.length) {
+    if (!data.debts.length) {
       container.innerHTML = `<div class="empty-state"><i class="fas fa-hand-holding-usd"></i>Henüz borç kaydı yok.<div class="hint">Kim kime ne kadar borçlu takip edin.</div></div>`;
       summary.innerHTML = '';
       return;
     }
-    const totalOwed = debts.filter(d => d.status !== 'Ödendi').reduce((s, d) => s + d.amount, 0);
-    const totalPaid = debts.filter(d => d.status === 'Ödendi').reduce((s, d) => s + d.amount, 0);
+    const totalOwed = data.debts.filter(d => d.status !== 'Ödendi').reduce((s, d) => s + d.amount, 0);
+    const totalPaid = data.debts.filter(d => d.status === 'Ödendi').reduce((s, d) => s + d.amount, 0);
     summary.innerHTML = `
       <div class="stats-grid" style="margin-bottom:0;">
         <div class="stat-item"><div class="number" style="color:var(--red);">₺${totalOwed}</div><div class="label">Bekleyen</div></div>
         <div class="stat-item"><div class="number" style="color:var(--green);">₺${totalPaid}</div><div class="label">Ödenen</div></div>
-        <div class="stat-item"><div class="number">${debts.length}</div><div class="label">Kayıt</div></div>
+        <div class="stat-item"><div class="number">${data.debts.length}</div><div class="label">Kayıt</div></div>
       </div>
     `;
-    container.innerHTML = debts.map(debt => `
+    container.innerHTML = data.debts.map(debt => `
       <div class="debt-item" onclick="showDetail('debts','${debt.id}')">
         <div class="card-icon ${debt.status === 'Ödendi' ? 'green' : 'red'}" style="width:38px;height:38px;font-size:14px;">
           <i class="fas ${debt.status === 'Ödendi' ? 'fa-check' : 'fa-hand-holding-usd'}"></i>
@@ -2926,25 +2830,22 @@
   }
 
   function markDebtPaid(id) {
-    const debts = (groupData && groupData.debts) || [];
-    const debt = debts.find(d => d.id === id);
+    const debt = data.debts.find(d => d.id === id);
     if (!debt) return;
     debt.status = 'Ödendi';
-    debt.updatedAt = new Date().toISOString();
-    saveGroupData();
+    saveData();
     addNotification(`💰 ${debt.from} → ${debt.to} borcu ödendi olarak işaretlendi.`);
   }
 
   function updateWalletUI() {
-    const expenses = (groupData && groupData.expenses) || [];
-    const total = expenses.reduce((s, e) => s + (e.type === 'gelir' ? e.amount : -e.amount), 0);
+    const total = data.expenses.reduce((s, e) => s + (e.type === 'gelir' ? e.amount : -e.amount), 0);
     document.getElementById('walletAmount').textContent = total.toLocaleString('tr-TR');
     document.getElementById('memberCount').textContent = Object.keys(friendships).length + 1;
-    const income = expenses.filter(e => e.type === 'gelir').reduce((s, e) => s + e.amount, 0);
-    const expense = expenses.filter(e => e.type === 'gider').reduce((s, e) => s + e.amount, 0);
+    const income = data.expenses.filter(e => e.type === 'gelir').reduce((s, e) => s + e.amount, 0);
+    const expense = data.expenses.filter(e => e.type === 'gider').reduce((s, e) => s + e.amount, 0);
     document.getElementById('totalIncome').textContent = income.toLocaleString('tr-TR');
     document.getElementById('totalExpense').textContent = expense.toLocaleString('tr-TR');
-    document.getElementById('transactionCount').textContent = expenses.length;
+    document.getElementById('transactionCount').textContent = data.expenses.length;
     
     // Arkadaşların cüzdanlarını render et
     renderFriendsWallets();
@@ -2963,16 +2864,17 @@
     Object.entries(friendships).forEach(([friendId, connection]) => {
       const friendData = friendsData[friendId];
       if (friendData) {
-        // Grup cüzdanı tüm kullanıcılar için ortak olduğu için arkadaşların cüzdanı göstermeyelim
+        const friendTotal = (friendData.expenses || []).reduce((sum, expense) => sum + (expense.type === 'gelir' ? expense.amount : -expense.amount), 0);
         const friendName = friendData._name || connection.displayName || 'Arkadaş';
         html += `
           <div class="card" style="padding:12px 14px;">
             <div class="flex-between">
               <span class="fw-700 fs-13">👤 ${escapeHtml(friendName)}</span>
-              <span class="fw-700" style="color:var(--green);">Grup üyesi</span>
+              <span class="fw-700" style="color:var(--accent);">₺${friendTotal.toLocaleString('tr-TR')}</span>
             </div>
             <div class="fs-11 text-muted mt-1">
-              Grup cüzdanını "Grup Cüzdanı" bölümünde görüntüleyebilirsin
+              ${(friendData.expenses || []).length} işlem ·
+              Gelir: ₺${(friendData.expenses || []).filter(expense => expense.type === 'gelir').reduce((sum, expense) => sum + expense.amount, 0).toLocaleString('tr-TR')}
             </div>
           </div>
         `;
@@ -2984,12 +2886,11 @@
 
   function renderSubscriptions() {
     const container = document.getElementById('subscriptionList');
-    const subs = (groupData && groupData.subscriptions) || [];
-    if (!subs.length) {
+    if (!data.subscriptions.length) {
       container.innerHTML = `<div class="empty-state"><i class="fas fa-repeat"></i>Abonelik yok.</div>`;
       return;
     }
-    container.innerHTML = subs.map(sub => `
+    container.innerHTML = data.subscriptions.map(sub => `
       <div class="card" onclick="showDetail('subscriptions','${sub.id}')">
         <div class="flex-between">
           <div>
@@ -3008,12 +2909,11 @@
 
   function renderGiftfunds() {
     const container = document.getElementById('giftfundList');
-    const funds = (groupData && groupData.giftfunds) || [];
-    if (!funds.length) {
+    if (!data.giftfunds.length) {
       container.innerHTML = `<div class="empty-state"><i class="fas fa-gift"></i>Hediye fonu yok.<div class="hint">Bir arkadaşınız için hediye toplayın!</div></div>`;
       return;
     }
-    container.innerHTML = funds.map(fund => {
+    container.innerHTML = data.giftfunds.map(fund => {
       const progress = Math.min(100, (fund.current / fund.target) * 100);
       const remaining = Math.max(0, fund.target - fund.current);
       return `
@@ -3040,26 +2940,23 @@
   }
 
   function addToGiftFund(id) {
-    const funds = (groupData && groupData.giftfunds) || [];
-    const fund = funds.find(f => f.id === id);
+    const fund = data.giftfunds.find(f => f.id === id);
     if (!fund) return;
     const amount = Number(prompt('Katkı miktarı (TL):'));
     if (!amount || amount <= 0) return;
     fund.current += amount;
-    fund.updatedAt = new Date().toISOString();
-    saveGroupData();
+    saveData();
     addNotification(`🎁 "${fund.name}" fonuna ₺${amount} katkı yapıldı.`);
   }
 
   // ---------- ATÖLYE ----------
   function renderBbqs() {
     const container = document.getElementById('bbqList');
-    const bbqs = (groupData && groupData.bbqs) || [];
-    if (!bbqs.length) {
+    if (!data.bbqs.length) {
       container.innerHTML = `<div class="empty-state"><i class="fas fa-fire"></i>Mangal etkinliği yok.<div class="hint">Mangal başlatın ve lezzetli anılar biriktirin!</div></div>`;
       return;
     }
-    container.innerHTML = bbqs.map(bbq => `
+    container.innerHTML = data.bbqs.map(bbq => `
       <div class="card" onclick="showDetail('bbqs','${bbq.id}')">
         <div class="card-row">
           <div class="card-icon"><i class="fas fa-fire"></i></div>
@@ -3084,12 +2981,11 @@
 
   function renderProjects() {
     const container = document.getElementById('projectList');
-    const projects = (groupData && groupData.projects) || [];
-    if (!projects.length) {
+    if (!data.projects.length) {
       container.innerHTML = `<div class="empty-state"><i class="fas fa-clipboard-list"></i>Proje yok.<div class="hint">Yeni bir proje oluşturun ve birlikte çalışın!</div></div>`;
       return;
     }
-    container.innerHTML = projects.map(proj => {
+    container.innerHTML = data.projects.map(proj => {
       const completed = (proj.tasks || []).filter(t => t.done).length;
       const total = (proj.tasks || []).length;
       const progress = total > 0 ? (completed / total) * 100 : 0;
@@ -3116,33 +3012,30 @@
   }
 
   function addProjectTask(id) {
-    const proj = findGroupItem('projects', id);
+    const proj = data.projects.find(p => p.id === id);
     if (!proj) return;
     const task = prompt('Görev adı:');
     if (!task) return;
     if (!proj.tasks) proj.tasks = [];
     proj.tasks.push({ text: task, done: false });
-    proj.updatedAt = new Date().toISOString();
-    saveGroupData();
+    saveData();
     addNotification(`📋 "${proj.name}" görevi eklendi: ${task}`);
   }
 
   function toggleProjectTask(projId, taskIdx) {
-    const proj = findGroupItem('projects', projId);
+    const proj = data.projects.find(p => p.id === projId);
     if (!proj || !proj.tasks) return;
     proj.tasks[taskIdx].done = !proj.tasks[taskIdx].done;
-    proj.updatedAt = new Date().toISOString();
-    saveGroupData();
+    saveData();
   }
 
   function renderInventory() {
     const container = document.getElementById('inventoryList');
-    const inventory = (groupData && groupData.inventory) || [];
-    if (!inventory.length) {
+    if (!data.inventory.length) {
       container.innerHTML = `<div class="empty-state"><i class="fas fa-toolbox"></i>Ekipman yok.<div class="hint">Grup ekipmanlarını takip edin!</div></div>`;
       return;
     }
-    container.innerHTML = inventory.map(item => `
+    container.innerHTML = data.inventory.map(item => `
       <div class="inventory-item" onclick="showDetail('inventory','${item.id}')">
         <div class="card-icon ${item.status === 'Müsait' ? 'green' : item.status === 'Kullanımda' ? 'blue' : 'red'}" style="width:38px;height:38px;font-size:18px;">
           ${escapeHtml(item.emoji || '🔧')}
@@ -3163,12 +3056,11 @@
   // ---------- CANLI ----------
   function renderFeed() {
     const container = document.getElementById('feedList');
-    const feed = (groupData && groupData.feed) || [];
-    if (!feed.length) {
+    if (!data.feed.length) {
       container.innerHTML = `<div class="empty-state"><i class="fas fa-stream"></i>Gönderi yok.<div class="hint">İlk gönderiyi siz yazın!</div></div>`;
       return;
     }
-    container.innerHTML = feed.map(post => `
+    container.innerHTML = data.feed.map(post => `
       <div class="feed-item" onclick="showDetail('feed','${post.id}')">
         <div class="feed-avatar" style="background:${post.color || 'var(--bg-elevated)'}">${escapeHtml(post.avatar || '?')}</div>
         <div class="feed-content">
@@ -3189,12 +3081,11 @@
 
   function renderMusic() {
     const container = document.getElementById('musicQueue');
-    const music = (groupData && groupData.music) || [];
-    if (!music.length) {
+    if (!data.music.length) {
       container.innerHTML = `<div class="empty-state" style="padding:20px 0;"><i class="fas fa-music"></i>Şarkı yok.</div>`;
       return;
     }
-    container.innerHTML = music.map((song, idx) => `
+    container.innerHTML = data.music.map((song, idx) => `
       <div class="music-queue-item">
         <span class="index">${idx + 1}</span>
         <span class="track">${escapeHtml(song.title)}${song.artist ? `<div class="artist">${escapeHtml(song.artist)}</div>` : ''}</span>
@@ -3208,12 +3099,11 @@
 
   function renderGames() {
     const container = document.getElementById('gameList');
-    const games = (groupData && groupData.games) || [];
-    if (!games.length) {
+    if (!data.games.length) {
       container.innerHTML = `<div class="empty-state"><i class="fas fa-gamepad"></i>Turnuva yok.<div class="hint">Oyun gecesi düzenleyin!</div></div>`;
       return;
     }
-    container.innerHTML = games.map(game => `
+    container.innerHTML = data.games.map(game => `
       <div class="card" onclick="showDetail('games','${game.id}')">
         <div class="card-row">
           <div class="card-icon pink"><i class="fas fa-gamepad"></i></div>
@@ -3265,12 +3155,11 @@
       const name = document.getElementById('p_name').value.trim();
       const status = document.getElementById('p_status').value;
       if (!name) return showToast('İsim gerekli', 'fa-exclamation-circle');
-      const item = findGroupItem(type, id);
+      const item = data[type].find(i => i.id === id);
       if (!item) return;
       if (!item.participants) item.participants = [];
       item.participants.push({ name, status });
-      item.updatedAt = new Date().toISOString();
-      saveGroupData();
+      saveData();
       addNotification(`👤 ${name} eklendi (${status}).`);
       openParticipantModal(type, id);
     };
@@ -3278,11 +3167,10 @@
   }
 
   function removeParticipant(type, id, name) {
-    const item = findGroupItem(type, id);
+    const item = data[type].find(i => i.id === id);
     if (!item || !item.participants) return;
     item.participants = item.participants.filter(p => p.name !== name);
-    item.updatedAt = new Date().toISOString();
-    saveGroupData();
+    saveData();
     addNotification(`👤 ${name} kaldırıldı.`);
   }
 
@@ -3290,7 +3178,7 @@
   // DETAIL
   // ================================================================
   function showDetail(type, id) {
-    const item = findGroupItem(type, id) || (data[type] && data[type].find(i => i.id === id));
+    const item = data[type].find(i => i.id === id);
     if (!item) return;
     const modal = document.getElementById('genericModal');
     document.getElementById('modalTitle').innerHTML = '<i class="fas fa-info-circle text-accent"></i> Detaylar';
@@ -3325,15 +3213,17 @@
   // ================================================================
   function deleteItem(type, id) {
     if (!confirm('Bu öğeyi silmek istediğinize emin misiniz?')) return;
-    // Önce ismi al, sonra sil
-    const item = findGroupItem(type, id) || (data[type] && data[type].find(i => i.id === id));
-    const name = item ? (item.name || item.title || 'Öğe') : 'Öğe';
-    removeFromGroup(type, id);
-    addNotification(`🗑️ "${name}" silindi.`);
+    const idx = data[type].findIndex(i => i.id === id);
+    if (idx !== -1) {
+      const name = data[type][idx].name || data[type][idx].title || 'Öğe';
+      data[type].splice(idx, 1);
+      saveData();
+      addNotification(`🗑️ "${name}" silindi.`);
+    }
   }
 
   function editItem(type, id) {
-    const item = findGroupItem(type, id) || (data[type] && data[type].find(i => i.id === id));
+    const item = data[type].find(i => i.id === id);
     if (!item) return;
     openModal(type, item);
   }
@@ -3363,8 +3253,7 @@
     document.getElementById('modalCloseBtn').textContent = 'İptal';
     document.getElementById('modalCloseBtn').onclick = closeModal;
 
-    const lb = (groupData && groupData.leaderboard) || [];
-    const names = lb.map(p => p.name);
+    const names = data.leaderboard.map(p => p.name);
     const nameOptions = names.length ? names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('') : '<option value="">Oyuncu eklemeden takım kurulamaz</option>';
 
     document.getElementById('modalBody').innerHTML = `
@@ -3387,7 +3276,8 @@
       const budget = document.getElementById('qm_budget').value || '500 TL/kişi';
       if (!teamA.length || !teamB.length) { showToast('Her iki takımdan da oyuncu seçin.', 'fa-exclamation-circle'); return; }
       const title = `⚽ ${teamA.join(', ')} vs ${teamB.join(', ')}`;
-      addToGroup('kesfet', { id: generateId(), title, date, location, budget, participants: [...teamA, ...teamB].map(n => ({name:n, status:'coming'})), createdBy: getDisplayName(), createdAt: new Date().toISOString() });
+      data.kesfet.push({ id: generateId(), title, date, location, budget, participants: [...teamA, ...teamB].map(n => ({name:n, status:'coming'})) });
+      saveData();
       addNotification(`⚽ Hızlı maç oluşturuldu: ${title}`);
       closeModal();
     };
@@ -3424,11 +3314,11 @@
       const count = document.getElementById('qb_count').value;
       const location = document.getElementById('qb_location').value || 'Park';
       if (!name) { showToast('Etkinlik adı gerekli.', 'fa-exclamation-circle'); return; }
-      addToGroup('bbqs', {
+      data.bbqs.push({
         id: generateId(), name, status: 'Planlandı', meat, items,
-        location, participants: Array.from({length: Math.min(count, 10)}, (_, i) => ({name: `Kişi ${i+1}`, status: 'maybe'})),
-        createdBy: getDisplayName(), createdAt: new Date().toISOString()
+        location, participants: Array.from({length: Math.min(count, 10)}, (_, i) => ({name: `Kişi ${i+1}`, status: 'maybe'}))
       });
+      saveData();
       addNotification(`🔥 "${name}" mangalı başlatıldı!`);
       closeModal();
     };
@@ -3443,11 +3333,9 @@
     document.getElementById('modalCloseBtn').textContent = 'Kapat';
     document.getElementById('modalCloseBtn').onclick = closeModal;
 
-    const expenses = (groupData && groupData.expenses) || [];
-    const debts = (groupData && groupData.debts) || [];
-    const total = expenses.reduce((s, e) => s + (e.type === 'gelir' ? e.amount : -e.amount), 0);
-    const pending = debts.filter(d => d.status !== 'Ödendi');
-    const paid = debts.filter(d => d.status === 'Ödendi');
+    const total = data.expenses.reduce((s, e) => s + (e.type === 'gelir' ? e.amount : -e.amount), 0);
+    const pending = data.debts.filter(d => d.status !== 'Ödendi');
+    const paid = data.debts.filter(d => d.status === 'Ödendi');
 
     let html = `
       <div class="wallet-balance" style="margin-bottom:16px;">
@@ -3514,7 +3402,8 @@
     `;
 
     document.getElementById('modalSaveBtn').onclick = () => {
-      addToGroup('kesfet', {...s, id: generateId(), date: new Date().toLocaleDateString('tr-TR'), participants: [], createdBy: getDisplayName(), createdAt: new Date().toISOString()});
+      data.kesfet.push({...s, id: generateId(), date: new Date().toLocaleDateString('tr-TR'), participants: []});
+      saveData();
       addNotification(`🎲 "${s.title}" önerisi eklendi!`);
       closeModal();
     };
@@ -3604,8 +3493,8 @@
           const obj = { title, date: document.getElementById('f_date').value || new Date().toLocaleDateString('tr-TR'),
             location: document.getElementById('f_location').value || 'Belirtilmemiş',
             budget: document.getElementById('f_budget').value || 'Ücretsiz' };
-          if (existingItem) { Object.assign(existingItem, obj); obj.updatedAt = new Date().toISOString(); saveGroupData(); } else { obj.id = generateId(); obj.participants = []; obj.createdBy = getDisplayName(); obj.createdAt = new Date().toISOString(); addToGroup('kesfet', obj); }
-          if (existingItem) closeModal(); else closeModal();
+          if (existingItem) { Object.assign(existingItem, obj); } else { obj.id = generateId(); obj.participants = []; data.kesfet.push(obj); }
+          saveData(); closeModal();
         };
         break;
       case 'arena':
@@ -3621,15 +3510,14 @@
           const name = document.getElementById('a_name').value.trim();
           if (!name) return showToast('Lig adı gerekli', 'fa-exclamation-circle');
           const obj = { name, detail: document.getElementById('a_detail').value || '', icon: document.getElementById('a_icon').value || '⚽', status: document.getElementById('a_status').value };
-          if (existingItem) { Object.assign(existingItem, obj); obj.updatedAt = new Date().toISOString(); saveGroupData(); }
-          else { obj.id = generateId(); obj.participants = []; obj.matches = []; obj.standings = []; obj.createdBy = getDisplayName(); obj.createdAt = new Date().toISOString(); addToGroup('arenaLigler', obj); }
-          closeModal();
+          if (existingItem) Object.assign(existingItem, obj);
+          else { obj.id = generateId(); obj.participants = []; obj.matches = []; obj.standings = []; data.arenaLigler.push(obj); }
+          saveData(); closeModal();
         };
         break;
       case 'challenge':
         title.innerHTML = existingItem ? '<i class="fas fa-edit text-accent"></i> Meydan Okumayı Düzenle' : '<i class="fas fa-plus-circle text-accent"></i> Yeni Meydan Okuma';
-        const gdlb = (groupData && groupData.leaderboard) || [];
-        const targetOptions = gdlb.map(p => `<option value="${escapeHtml(p.name)}" ${val('target')===p.name?'selected':''}>${escapeHtml(p.name)}</option>`).join('');
+        const targetOptions = data.leaderboard.map(p => `<option value="${escapeHtml(p.name)}" ${val('target')===p.name?'selected':''}>${escapeHtml(p.name)}</option>`).join('');
         html = `
           <label>Başlık</label><input id="c_title" value="${escapeHtml(val('title'))}" placeholder="Ahmet vs Mehmet" />
           <label>Açıklama</label><input id="c_desc" value="${escapeHtml(val('desc'))}" placeholder="Bu hafta kim daha çok koşar?" />
@@ -3643,9 +3531,9 @@
           const title = document.getElementById('c_title').value.trim();
           if (!title) return showToast('Başlık gerekli', 'fa-exclamation-circle');
           const obj = { title, desc: document.getElementById('c_desc').value || '', target: document.getElementById('c_target').value || '', status: document.getElementById('c_status').value, progress: document.getElementById('c_progress').value || 'Başlamadı' };
-          if (existingItem) { Object.assign(existingItem, obj); obj.updatedAt = new Date().toISOString(); saveGroupData(); }
-          else { obj.id = generateId(); obj.participants = []; obj.createdBy = getDisplayName(); obj.createdAt = new Date().toISOString(); addToGroup('challenges', obj); }
-          closeModal();
+          if (existingItem) Object.assign(existingItem, obj);
+          else { obj.id = generateId(); obj.participants = []; data.challenges.push(obj); }
+          saveData(); closeModal();
         };
         break;
       case 'leaderboard':
@@ -3660,9 +3548,9 @@
           const score = Number(document.getElementById('lb_score').value);
           if (!name || !score) return showToast('İsim ve puan gerekli', 'fa-exclamation-circle');
           const obj = { name, score, avatar: document.getElementById('lb_avatar').value || name[0] };
-          if (existingItem) { Object.assign(existingItem, obj); obj.updatedAt = new Date().toISOString(); saveGroupData(); }
-          else { obj.id = generateId(); obj.createdBy = getDisplayName(); obj.createdAt = new Date().toISOString(); addToGroup('leaderboard', obj); }
-          closeModal();
+          if (existingItem) Object.assign(existingItem, obj);
+          else { obj.id = generateId(); data.leaderboard.push(obj); }
+          saveData(); closeModal();
         };
         break;
       case 'expense':
@@ -3680,20 +3568,19 @@
           const amount = Number(document.getElementById('e_amount').value);
           if (!title || !amount) return showToast('Açıklama ve tutar gerekli', 'fa-exclamation-circle');
           const obj = { title, amount, type: document.getElementById('e_type').value, payer: document.getElementById('e_payer').value || 'Grup', members: document.getElementById('e_members').value || 1 };
-          if (existingItem) { Object.assign(existingItem, obj); obj.updatedAt = new Date().toISOString(); saveGroupData(); }
-          else { obj.id = generateId(); obj.createdBy = getDisplayName(); obj.createdAt = new Date().toISOString(); addToGroup('expenses', obj); }
-          closeModal();
+          if (existingItem) Object.assign(existingItem, obj);
+          else { obj.id = generateId(); data.expenses.push(obj); }
+          saveData(); closeModal();
         };
         break;
       case 'debt':
         title.innerHTML = existingItem ? '<i class="fas fa-edit text-accent"></i> Borcu Düzenle' : '<i class="fas fa-plus-circle text-accent"></i> Yeni Borç Ekle';
-        const debtNames = (groupData && groupData.leaderboard) || [];
-        const debtNameList = debtNames.map(p => p.name);
+        const debtNames = data.leaderboard.map(p => p.name);
         html = `
           <label>Borçlu</label>
-          <select id="d_from">${debtNameList.map(n => `<option value="${escapeHtml(n)}" ${val('from')===n?'selected':''}>${escapeHtml(n)}</option>`).join('')}</select>
+          <select id="d_from">${debtNames.map(n => `<option value="${escapeHtml(n)}" ${val('from')===n?'selected':''}>${escapeHtml(n)}</option>`).join('')}</select>
           <label>Alacaklı</label>
-          <select id="d_to">${debtNameList.map(n => `<option value="${escapeHtml(n)}" ${val('to')===n?'selected':''}>${escapeHtml(n)}</option>`).join('')}</select>
+          <select id="d_to">${debtNames.map(n => `<option value="${escapeHtml(n)}" ${val('to')===n?'selected':''}>${escapeHtml(n)}</option>`).join('')}</select>
           <label>Tutar</label><input id="d_amount" type="text" value="${escapeHtml(val('amount'))}" placeholder="200" />
           <label>Sebep</label><input id="d_reason" value="${escapeHtml(val('reason'))}" placeholder="Halı saha masrafı" />
           <label>Durum</label>
@@ -3706,9 +3593,9 @@
           if (from === to) return showToast('Borçlu ve alacaklı aynı olamaz', 'fa-exclamation-circle');
           if (!amount) return showToast('Tutar gerekli', 'fa-exclamation-circle');
           const obj = { from, to, amount, reason: document.getElementById('d_reason').value || '', status: document.getElementById('d_status').value };
-          if (existingItem) { Object.assign(existingItem, obj); obj.updatedAt = new Date().toISOString(); saveGroupData(); }
-          else { obj.id = generateId(); obj.createdBy = getDisplayName(); obj.createdAt = new Date().toISOString(); addToGroup('debts', obj); }
-          closeModal();
+          if (existingItem) Object.assign(existingItem, obj);
+          else { obj.id = generateId(); data.debts.push(obj); }
+          saveData(); closeModal();
         };
         break;
       case 'subscription':
@@ -3725,9 +3612,9 @@
           const amount = Number(document.getElementById('s_amount').value);
           if (!name || !amount) return showToast('Ad ve ücret gerekli', 'fa-exclamation-circle');
           const obj = { name, amount, next: document.getElementById('s_next').value || 'Belirtilmemiş', status: document.getElementById('s_status').value };
-          if (existingItem) { Object.assign(existingItem, obj); obj.updatedAt = new Date().toISOString(); saveGroupData(); }
-          else { obj.id = generateId(); obj.createdBy = getDisplayName(); obj.createdAt = new Date().toISOString(); addToGroup('subscriptions', obj); }
-          closeModal();
+          if (existingItem) Object.assign(existingItem, obj);
+          else { obj.id = generateId(); data.subscriptions.push(obj); }
+          saveData(); closeModal();
         };
         break;
       case 'giftfund':
@@ -3743,9 +3630,9 @@
           const current = Number(document.getElementById('g_current').value) || 0;
           if (!name || !target) return showToast('Ad ve hedef gerekli', 'fa-exclamation-circle');
           const obj = { name, target, current };
-          if (existingItem) { Object.assign(existingItem, obj); obj.updatedAt = new Date().toISOString(); saveGroupData(); }
-          else { obj.id = generateId(); obj.createdBy = getDisplayName(); obj.createdAt = new Date().toISOString(); addToGroup('giftfunds', obj); }
-          closeModal();
+          if (existingItem) Object.assign(existingItem, obj);
+          else { obj.id = generateId(); data.giftfunds.push(obj); }
+          saveData(); closeModal();
         };
         break;
       case 'bbq':
@@ -3761,9 +3648,9 @@
           const name = document.getElementById('b_name').value.trim();
           if (!name) return showToast('Etkinlik adı gerekli', 'fa-exclamation-circle');
           const obj = { name, meat: document.getElementById('b_meat').value || 'Biftek', items: document.getElementById('b_items').value || 'Et, ekmek, salata', status: document.getElementById('b_status').value };
-          if (existingItem) { Object.assign(existingItem, obj); obj.updatedAt = new Date().toISOString(); saveGroupData(); }
-          else { obj.id = generateId(); obj.participants = []; obj.createdBy = getDisplayName(); obj.createdAt = new Date().toISOString(); addToGroup('bbqs', obj); }
-          closeModal();
+          if (existingItem) Object.assign(existingItem, obj);
+          else { obj.id = generateId(); obj.participants = []; data.bbqs.push(obj); }
+          saveData(); closeModal();
         };
         break;
       case 'project':
@@ -3778,9 +3665,9 @@
           const name = document.getElementById('p_name').value.trim();
           if (!name) return showToast('Proje adı gerekli', 'fa-exclamation-circle');
           const obj = { name, icon: document.getElementById('p_icon').value || '📋', status: document.getElementById('p_status').value, tasks: existingItem ? existingItem.tasks || [] : [] };
-          if (existingItem) { Object.assign(existingItem, obj); obj.updatedAt = new Date().toISOString(); saveGroupData(); }
-          else { obj.id = generateId(); obj.createdBy = getDisplayName(); obj.createdAt = new Date().toISOString(); addToGroup('projects', obj); }
-          closeModal();
+          if (existingItem) Object.assign(existingItem, obj);
+          else { obj.id = generateId(); data.projects.push(obj); }
+          saveData(); closeModal();
         };
         break;
       case 'inventory':
@@ -3796,9 +3683,9 @@
           const name = document.getElementById('i_name').value.trim();
           if (!name) return showToast('Ekipman adı gerekli', 'fa-exclamation-circle');
           const obj = { name, emoji: document.getElementById('i_emoji').value || '🔧', owner: document.getElementById('i_owner').value || 'Grup', status: document.getElementById('i_status').value };
-          if (existingItem) { Object.assign(existingItem, obj); obj.updatedAt = new Date().toISOString(); saveGroupData(); }
-          else { obj.id = generateId(); obj.createdBy = getDisplayName(); obj.createdAt = new Date().toISOString(); addToGroup('inventory', obj); }
-          closeModal();
+          if (existingItem) Object.assign(existingItem, obj);
+          else { obj.id = generateId(); data.inventory.push(obj); }
+          saveData(); closeModal();
         };
         break;
       case 'feed':
@@ -3813,9 +3700,9 @@
           const text = document.getElementById('f_text').value.trim();
           if (!text) return showToast('İçerik gerekli', 'fa-exclamation-circle');
           const obj = { author, text, time: 'Şimdi', color: document.getElementById('f_color').value || 'var(--bg-elevated)', avatar: author[0] };
-          if (existingItem) { Object.assign(existingItem, obj); obj.updatedAt = new Date().toISOString(); saveGroupData(); }
-          else { obj.id = generateId(); obj.createdBy = getDisplayName(); obj.createdAt = new Date().toISOString(); addToGroup('feed', obj); }
-          closeModal();
+          if (existingItem) Object.assign(existingItem, obj);
+          else { obj.id = generateId(); data.feed.push(obj); }
+          saveData(); closeModal();
         };
         break;
       case 'music':
@@ -3828,9 +3715,9 @@
           const title = document.getElementById('m_title').value.trim();
           if (!title) return showToast('Şarkı adı gerekli', 'fa-exclamation-circle');
           const obj = { title, artist: document.getElementById('m_artist').value || '' };
-          if (existingItem) { Object.assign(existingItem, obj); obj.updatedAt = new Date().toISOString(); saveGroupData(); }
-          else { obj.id = generateId(); obj.createdBy = getDisplayName(); obj.createdAt = new Date().toISOString(); addToGroup('music', obj); }
-          closeModal();
+          if (existingItem) Object.assign(existingItem, obj);
+          else { obj.id = generateId(); data.music.push(obj); }
+          saveData(); closeModal();
         };
         break;
       case 'game':
@@ -3847,9 +3734,9 @@
           const name = document.getElementById('g_name').value.trim();
           if (!name) return showToast('Turnuva adı gerekli', 'fa-exclamation-circle');
           const obj = { name, players: document.getElementById('g_players').value || 0, location: document.getElementById('g_location').value || '', icon: document.getElementById('g_icon').value || '🎮', status: document.getElementById('g_status').value };
-          if (existingItem) { Object.assign(existingItem, obj); obj.updatedAt = new Date().toISOString(); saveGroupData(); }
-          else { obj.id = generateId(); obj.participants = []; obj.createdBy = getDisplayName(); obj.createdAt = new Date().toISOString(); addToGroup('games', obj); }
-          closeModal();
+          if (existingItem) Object.assign(existingItem, obj);
+          else { obj.id = generateId(); obj.participants = []; data.games.push(obj); }
+          saveData(); closeModal();
         };
         break;
       case 'album':
@@ -3863,10 +3750,8 @@
           if (!name) return showToast('Albüm adı gerekli', 'fa-exclamation-circle');
           const obj = { name, emoji: document.getElementById('al_emoji').value || '📁', photos: [] };
           obj.id = generateId();
-          obj.createdBy = getDisplayName();
-          obj.createdAt = new Date().toISOString();
-          addToGroup('albums', obj);
-          closeModal();
+          data.albums.push(obj);
+          saveData(); closeModal();
           addNotification(`📁 "${name}" albümü oluşturuldu.`);
         };
         break;
@@ -3931,9 +3816,8 @@
   // BADGE
   // ================================================================
   function updateBadges() {
-    const gd = groupData || {};
-    document.getElementById('arenaBadge').textContent = (gd.arenaLigler || []).length + (gd.challenges || []).length;
-    document.getElementById('atolyeBadge').textContent = (gd.bbqs || []).length + (gd.projects || []).length + (gd.inventory || []).length;
+    document.getElementById('arenaBadge').textContent = data.arenaLigler.length + data.challenges.length;
+    document.getElementById('atolyeBadge').textContent = data.bbqs.length + data.projects.length + data.inventory.length;
   }
 
   // ================================================================

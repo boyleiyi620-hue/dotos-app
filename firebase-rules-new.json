@@ -50,6 +50,13 @@
         ".read": true,
         ".write": true
       }
+    },
+
+    "groupData": {
+      "$groupId": {
+        ".read": true,
+        ".write": true
+      }
     }
   }
 }
