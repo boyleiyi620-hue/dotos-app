@@ -555,7 +555,7 @@
 
     /* ==================== FAB ==================== */
     .fab {
-      position:absolute; bottom:calc(var(--nav-height) + 20px + var(--safe-bottom)); left:50%; transform:translateX(-50%);
+      position:fixed; bottom:calc(var(--nav-height) + 20px + var(--safe-bottom)); left:50%; transform:translateX(-50%);
       width:68px; height:68px; border-radius:50%;
       background: linear-gradient(135deg, var(--accent), #f59e0b);
       border:none; color:#fff; font-size:28px;
@@ -574,7 +574,7 @@
 
     /* ==================== BOTTOM NAV ==================== */
     .bottom-nav {
-      position:absolute; bottom:0; left:0; right:0;
+      position:fixed; bottom:0; left:0; right:0;
       height:calc(var(--nav-height) + var(--safe-bottom));
       padding-bottom:var(--safe-bottom); padding:0 12px var(--safe-bottom);
       /* iOS home indicator desteği */
@@ -584,6 +584,8 @@
       display:flex; align-items:stretch; justify-content:space-around; z-index:99;
       backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px);
       box-shadow: 0 -4px 20px rgba(0,0,0,0.3);
+      max-width:480px;
+      margin:0 auto;
     }
     .nav-item {
       flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
@@ -897,8 +899,13 @@
         min-height:0 !important;
       }
       .bottom-nav {
-        position:absolute;
+        position:fixed !important;
+        bottom:0 !important;
+        left:50% !important;
+        right:auto !important;
+        transform:translateX(-50%);
         flex-shrink:0;
+        z-index:99 !important;
       }
     }
     @supports (-webkit-touch-callout: none) {
@@ -917,6 +924,21 @@
         overflow:hidden !important;
         display:flex !important;
         flex-direction:column;
+      }
+      .bottom-nav {
+        position:fixed !important;
+        bottom:0 !important;
+        left:50% !important;
+        right:auto !important;
+        transform:translateX(-50%);
+        flex-shrink:0;
+        z-index:99 !important;
+      }
+      .fab {
+        position:fixed !important;
+        bottom:calc(var(--nav-height) + 20px + var(--safe-bottom)) !important;
+        left:50% !important;
+        transform:translateX(-50%) !important;
       }
       body { display:block !important; }
     }
@@ -1140,11 +1162,12 @@
       <div id="gameList"></div>
     </div>
   </div>
+</div>
 
-  <!-- FAB -->
+  <!-- FAB (outside #app for iOS fixed positioning) -->
   <button class="fab" id="fabBtn"><i class="fas fa-plus"></i></button>
 
-  <!-- FAB MODAL -->
+  <!-- FAB MODAL (outside #app for iOS fixed positioning) -->
   <div class="fab-modal" id="fabModal">
     <div class="modal-sheet">
       <div class="handle"></div>
@@ -1159,7 +1182,7 @@
     </div>
   </div>
 
-  <!-- BOTTOM NAV -->
+  <!-- BOTTOM NAV (outside #app for iOS overflow fix) -->
   <nav class="bottom-nav" id="bottomNav">
     <button class="nav-item active" data-tab="kesfet"><i class="fas fa-compass"></i><span>Keşfet</span></button>
     <button class="nav-item" data-tab="arena"><i class="fas fa-trophy"></i><span>Arena</span><span class="nav-badge" id="arenaBadge">0</span></button>
@@ -1167,7 +1190,6 @@
     <button class="nav-item" data-tab="atolye"><i class="fas fa-tools"></i><span>Atölye</span><span class="nav-badge" id="atolyeBadge">0</span></button>
     <button class="nav-item" data-tab="canli"><i class="fas fa-bolt"></i><span>Canlı</span></button>
   </nav>
-</div>
 
 <!-- PWA INSTALL BANNER -->
 <div id="installBanner" style="display:none;position:fixed;bottom:calc(var(--nav-height) + env(safe-area-inset-bottom,0px) + 12px);left:50%;transform:translateX(-50%);z-index:150;background:linear-gradient(135deg,#f97316,#f59e0b);color:#fff;padding:10px 20px;border-radius:50px;font-size:13px;font-weight:700;align-items:center;gap:10px;box-shadow:0 8px 32px rgba(249,115,22,0.5);max-width:340px;width:90%;cursor:pointer;" onclick="triggerInstall()">
