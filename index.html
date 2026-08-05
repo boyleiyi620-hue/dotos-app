@@ -574,14 +574,17 @@
 
     /* ==================== BOTTOM NAV ==================== */
     .bottom-nav {
-      position:fixed; bottom:0; left:0; right:0;
-      width:100%;
+      position:fixed; bottom:0;
+      left:10px; right:10px;
+      width:calc(100% - 20px);
       height:calc(var(--nav-height) + var(--safe-bottom));
       padding-bottom:var(--safe-bottom); padding:0 0 var(--safe-bottom);
       /* iOS home indicator desteği */
       padding-top:8px;
       background: linear-gradient(0deg, rgba(7,11,20,0.98) 0%, rgba(7,11,20,0.85) 100%);
-      border-top:1px solid var(--border);
+      border:1px solid var(--border);
+      border-bottom:none;
+      border-radius:20px 20px 0 0;
       display:flex; align-items:stretch; justify-content:space-around; z-index:99;
       backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px);
       box-shadow: 0 -4px 20px rgba(0,0,0,0.3);
@@ -900,11 +903,14 @@
       .bottom-nav {
         position:fixed !important;
         bottom:0 !important;
-        left:0 !important;
-        right:0 !important;
-        width:100% !important;
+        left:10px !important;
+        right:10px !important;
+        width:calc(100% - 20px) !important;
         flex-shrink:0;
         z-index:99 !important;
+        border-radius:20px 20px 0 0 !important;
+        border:1px solid var(--border) !important;
+        border-bottom:none !important;
       }
     }
     @supports (-webkit-touch-callout: none) {
@@ -927,11 +933,14 @@
       .bottom-nav {
         position:fixed !important;
         bottom:0 !important;
-        left:0 !important;
-        right:0 !important;
-        width:100% !important;
+        left:10px !important;
+        right:10px !important;
+        width:calc(100% - 20px) !important;
         flex-shrink:0;
         z-index:99 !important;
+        border-radius:20px 20px 0 0 !important;
+        border:1px solid var(--border) !important;
+        border-bottom:none !important;
       }
       .fab {
         position:fixed !important;
