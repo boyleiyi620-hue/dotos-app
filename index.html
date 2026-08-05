@@ -130,15 +130,16 @@
     /* ==================== HEADER ==================== */
     .app-header {
       display:flex; justify-content:space-between; align-items:center;
-      padding:16px 20px 12px; flex-shrink:0;
+      padding:16px 12px 12px; flex-shrink:0;
       background: linear-gradient(180deg, rgba(11,15,26,0.95) 0%, rgba(11,15,26,0.7) 100%);
       backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px);
       border-bottom:1px solid var(--border); z-index:50;
       /* iOS safe area top */
       padding-top: calc(16px + var(--safe-top));
       -webkit-padding-top: calc(16px + var(--safe-top));
+      overflow:visible;
     }
-    .app-header .brand { display:flex; align-items:center; gap:12px; }
+    .app-header .brand { display:flex; align-items:center; gap:8px; flex-shrink:1; min-width:0; }
     .app-header .brand .logo {
       width:40px; height:40px; border-radius:14px;
       background: linear-gradient(135deg, var(--accent), #f59e0b);
@@ -152,15 +153,17 @@
     }
     .app-header .brand span {
       font-weight:800; font-size:20px; letter-spacing:-0.5px; color:var(--text-primary);
+      white-space:nowrap;
     }
     .app-header .brand .dot { color:var(--accent); }
-    .app-header .header-actions { display:flex; gap:10px; }
+    .app-header .header-actions { display:flex; gap:6px; flex-shrink:0; }
     .app-header .header-actions .action-btn {
-      width:40px; height:40px; border-radius:50%; border:none;
+      width:36px; height:36px; border-radius:50%; border:none;
       background: var(--bg-card); color:var(--text-secondary);
       cursor:pointer; transition:var(--transition);
-      display:flex; align-items:center; justify-content:center; position:relative; font-size:16px;
+      display:flex; align-items:center; justify-content:center; position:relative; font-size:14px;
       backdrop-filter:blur(10px); border:1px solid var(--border);
+      flex-shrink:0;
     }
     .app-header .header-actions .action-btn:hover {
       background:var(--bg-card-hover); color:var(--text-primary); transform:scale(1.08);
@@ -921,8 +924,9 @@
     /* ==================== RESPONSIVE FIXES ==================== */
     @media (max-width:480px) {
       .main-content { padding:0 14px calc(var(--nav-height) + var(--safe-bottom) + 16px); }
-      .app-header { padding:12px 16px 10px; }
+      .app-header { padding:12px 10px 10px; }
       .app-header .brand span { font-size:18px; }
+      .app-header .header-actions .action-btn { width:34px; height:34px; font-size:13px; }
       .wallet-balance .amount { font-size:32px; }
       .modal-box { padding:20px; }
       .fab { left:50%; transform:translateX(-50%); width:56px; height:56px; font-size:24px; }
@@ -970,9 +974,9 @@
       <span>Dost<span class="dot">OS</span></span>
     </div>
     <div class="header-actions">
-      <div id="userDisplay" style="display:none;align-items:center;gap:8px;margin-right:10px;">
-        <span style="font-size:13px;font-weight:600;color:var(--text-primary);" id="userNameDisplay">Kullanıcı</span>
-        <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--gold));display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;color:#fff;" id="userAvatar">K</div>
+      <div id="userDisplay" style="display:none;align-items:center;gap:6px;margin-right:6px;">
+        <span style="font-size:12px;font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60px;" id="userNameDisplay">Kullanıcı</span>
+        <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--gold));display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;color:#fff;flex-shrink:0;" id="userAvatar">K</div>
       </div>
       <button class="action-btn" id="notifBtn" title="Bildirimler">
         <i class="fas fa-bell"></i>
