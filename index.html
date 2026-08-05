@@ -72,6 +72,10 @@
       /* iOS PWA safe area desteği */
       padding-top: env(safe-area-inset-top, 0px);
       -webkit-padding-top: env(safe-area-inset-top, 0px);
+      position:fixed;
+      width:100%;
+      top:0;
+      left:0;
     }
     input, select, textarea, button {
       user-select: text !important;
@@ -105,12 +109,22 @@
       display:flex; flex-direction:column; height:100%; max-width:480px; margin:0 auto;
       position:relative; overflow:hidden; background:var(--bg-primary);
       box-shadow:0 0 60px rgba(0,0,0,0.8);
-      /* iOS PWA'de header görünür olması için */
       width:100%;
     }
     @media (min-width:481px) {
       #app { border-radius:24px; margin-top:12px; margin-bottom:12px; max-height:96vh; border:1px solid var(--border); }
       body { display:flex; align-items:center; justify-content:center; }
+    }
+    /* iOS'ta body height'ı sabit tut */
+    @supports (-webkit-touch-callout: none) {
+      #app {
+        height:100vh;
+        min-height:100vh;
+        max-height:100vh;
+      }
+      html, body {
+        overflow:hidden !important;
+      }
     }
 
     /* ==================== HEADER ==================== */
@@ -161,12 +175,14 @@
 
     /* ==================== MAIN CONTENT ==================== */
     .main-content {
-      flex:1; overflow-y:auto; padding:0 16px calc(var(--nav-height) + var(--safe-bottom) + 20px);
+      flex:1; overflow-y:auto; overflow-x:hidden; padding:0 16px calc(var(--nav-height) + var(--safe-bottom) + 20px);
       scroll-behavior:smooth; -webkit-overflow-scrolling:touch;
       width:100%; max-width:100%;
       -webkit-overflow-scrolling:touch;
-      /* iOS'ta overscrollbounce */
       overscroll-behavior: contain;
+      /* iOS'ta sabit yükseklik - içerik eklendiğinde boyut değişmesin */
+      min-height:0;
+      flex:1 1 auto;
     }
     .tab-page { display:none; animation:fadeSlide 0.4s cubic-bezier(0.16, 1, 0.3, 1); width:100%; }
     .tab-page.active { display:block; }
@@ -543,7 +559,7 @@
       display:flex; align-items:center; justify-content:center;
       box-shadow:0 8px 32px rgba(249,115,22,0.5), 0 0 0 4px rgba(249,115,22,0.1);
       cursor:pointer; transition:var(--transition); z-index:100;
-      position:relative; overflow:hidden;
+      overflow:hidden;
     }
     .fab::after {
       content:''; position:absolute; inset:0;
@@ -848,34 +864,63 @@
 
     .section-title .actions .see-all:last-child { margin-left:0; }
 
-    /* iOS PWA Standalone Mode */
+    /* iOS PWA Standalone Mode - SABİT EKRAN BOYUTU */
     @media screen and (display-mode: standalone) {
       html, body {
         padding-top: env(safe-area-inset-top, 0px);
+        overflow:hidden !important;
+        position:fixed !important;
+        top:0; left:0; right:0; bottom:0;
+        width:100%;
       }
       #app {
-        height:100vh;
-        height:-webkit-fill-available;
-        min-height:-webkit-fill-available;
+        height:100vh !important;
+        min-height:100vh !important;
+        max-height:100vh !important;
         border-radius:0;
         box-shadow:none;
+        overflow:hidden !important;
+        display:flex !important;
+        flex-direction:column;
       }
       .app-header {
         padding-top: calc(12px + env(safe-area-inset-top, 0px));
+        flex-shrink:0;
       }
       .main-content {
-        height:calc(100% - var(--nav-height));
+        flex:1 !important;
+        overflow-y:auto !important;
+        overflow-x:hidden !important;
+        min-height:0 !important;
+      }
+      .bottom-nav {
+        position:absolute;
+        flex-shrink:0;
       }
     }
     @supports (-webkit-touch-callout: none) {
-      html, body { height:-webkit-fill-available; }
-      #app { height:-webkit-fill-available; min-height:-webkit-fill-available; }
-      body { display:block; }
+      html, body { 
+        height:100vh;
+        min-height:100vh;
+        overflow:hidden !important; 
+        position:fixed !important;
+        top:0; left:0; right:0; bottom:0;
+        width:100%;
+      }
+      #app { 
+        height:100vh;
+        min-height:100vh;
+        max-height:100vh;
+        overflow:hidden !important;
+        display:flex !important;
+        flex-direction:column;
+      }
+      body { display:block !important; }
     }
 
     /* ==================== RESPONSIVE FIXES ==================== */
     @media (max-width:480px) {
-      .main-content { padding:0 14px 90px; }
+      .main-content { padding:0 14px calc(var(--nav-height) + var(--safe-bottom) + 16px); }
       .app-header { padding:12px 16px 10px; }
       .app-header .brand span { font-size:18px; }
       .wallet-balance .amount { font-size:32px; }
@@ -1121,7 +1166,7 @@
 </div>
 
 <!-- PWA INSTALL BANNER -->
-<div id="installBanner" style="display:none;position:fixed;bottom:calc(80px + env(safe-area-inset-bottom,0px) + 12px);left:50%;transform:translateX(-50%);z-index:150;background:linear-gradient(135deg,#f97316,#f59e0b);color:#fff;padding:10px 20px;border-radius:50px;font-size:13px;font-weight:700;align-items:center;gap:10px;box-shadow:0 8px 32px rgba(249,115,22,0.5);max-width:340px;width:90%;cursor:pointer;" onclick="triggerInstall()">
+<div id="installBanner" style="display:none;position:fixed;bottom:calc(var(--nav-height) + env(safe-area-inset-bottom,0px) + 12px);left:50%;transform:translateX(-50%);z-index:150;background:linear-gradient(135deg,#f97316,#f59e0b);color:#fff;padding:10px 20px;border-radius:50px;font-size:13px;font-weight:700;align-items:center;gap:10px;box-shadow:0 8px 32px rgba(249,115,22,0.5);max-width:340px;width:90%;cursor:pointer;" onclick="triggerInstall()">
   <i class="fas fa-download"></i>
   <span>Ana Ekrana Ekle – Uygulama Gibi Çalışsın!</span>
   <button onclick="event.stopPropagation();document.getElementById('installBanner').style.display='none';" style="background:rgba(0,0,0,0.2);border:none;color:#fff;border-radius:50%;width:22px;height:22px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i class="fas fa-times"></i></button>
