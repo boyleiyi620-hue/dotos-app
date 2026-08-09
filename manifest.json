@@ -1,5 +1,7 @@
 {
   "name": "DostOS – Planla, Paylaş, Yaşa.",
+  "id": "dostos-v2",
+  "version": "2.0",
   "short_name": "DostOS",
   "description": "Arkadaş grubu yönetim uygulaması – aktivite planla, borç takip et, turnuva düzenle.",
   "start_url": "./index.html",
@@ -11,49 +13,49 @@
   "lang": "tr",
   "icons": [
     {
-      "src": "icons/icon-72.png",
+      "src": "icons/icon-72_v2.png",
       "sizes": "72x72",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "icons/icon-96.png",
+      "src": "icons/icon-96_v2.png",
       "sizes": "96x96",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "icons/icon-128.png",
+      "src": "icons/icon-128_v2.png",
       "sizes": "128x128",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "icons/icon-144.png",
+      "src": "icons/icon-144_v2.png",
       "sizes": "144x144",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "icons/icon-152.png",
+      "src": "icons/icon-152_v2.png",
       "sizes": "152x152",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "icons/icon-192.png",
+      "src": "icons/icon-192_v2.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "icons/icon-384.png",
+      "src": "icons/icon-384_v2.png",
       "sizes": "384x384",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "icons/icon-512.png",
+      "src": "icons/icon-512_v2.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
@@ -67,14 +69,14 @@
       "short_name": "Keşfet",
       "description": "Bugün ne yapsak?",
       "url": "/?tab=kesfet",
-      "icons": [{ "src": "icons/icon-96.png", "sizes": "96x96" }]
+      "icons": [{ "src": "icons/icon-96_v2.png", "sizes": "96x96" }]
     },
     {
       "name": "Kasa",
       "short_name": "Kasa",
       "description": "Grup cüzdanı",
       "url": "/?tab=kasa",
-      "icons": [{ "src": "icons/icon-96.png", "sizes": "96x96" }]
+      "icons": [{ "src": "icons/icon-96_v2.png", "sizes": "96x96" }]
     }
   ]
 }

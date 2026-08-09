@@ -1,21 +1,27 @@
-// DostOS Service Worker v1.0
-const CACHE_NAME = 'dostos-v1';
+// DostOS Service Worker v2.0
+const CACHE_NAME = 'dostos-v2';
 const STATIC_ASSETS = [
   './',
   './index.html',
-  './manifest.json',
+  './manifest.json?v=2',
+  './icons/icon-192_v2.png',
+  './icons/icon-512_v2.png',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
   'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap'
 ];
 
-// Install event – cache static assets
+// Install event – cache static assets (force reload)
 self.addEventListener('install', (event) => {
+  // Skip waiting immediately to activate new SW
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll([
         './',
-        './index.html',
-        './manifest.json'
+        './index.html?v=2',
+        './manifest.json?v=2',
+        './icons/icon-192_v2.png',
+        './icons/icon-512_v2.png'
       ]);
     }).then(() => self.skipWaiting())
   );
@@ -65,14 +71,21 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
+// SKIP_WAITING support – new SW immediately activates
+self.addEventListener('message', (event) => {
+  if (event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
 // Push notification support (for future Firebase integration)
 self.addEventListener('push', (event) => {
   if (!event.data) return;
   const data = event.data.json();
   const options = {
     body: data.body || 'Yeni bir bildirim var!',
-    icon: '/icons/icon-192.png',
-    badge: '/icons/icon-72.png',
+    icon: '/icons/icon-192_v2.png',
+    badge: '/icons/icon-72_v2.png',
     vibrate: [100, 50, 100],
     data: { url: data.url || '/' },
     actions: [

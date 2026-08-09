@@ -5,18 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>DostOS – Planla, Paylaş, Yaşa.</title>
   <!-- PWA -->
-  <link rel="manifest" href="manifest.json" />
+  <link rel="manifest" href="manifest.json?v=2" />
   <meta name="theme-color" content="#f97316" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="DostOS" />
-  <link rel="icon" href="favicon.ico" sizes="32x32" />
-  <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="apple-touch-icon" sizes="152x152" href="icons/icon-152.png" />
-  <link rel="apple-touch-icon" sizes="144x144" href="icons/icon-144.png" />
-  <link rel="apple-touch-icon" sizes="128x128" href="icons/icon-128.png" />
-  <link rel="apple-touch-icon" sizes="96x96" href="icons/icon-96.png" />
+  <link rel="icon" href="favicon.ico?v=2" sizes="32x32" />
+  <link rel="apple-touch-icon" href="icons/icon-192_v2.png" />
+  <link rel="apple-touch-icon" sizes="152x152" href="icons/icon-152_v2.png" />
+  <link rel="apple-touch-icon" sizes="144x144" href="icons/icon-144_v2.png" />
+  <link rel="apple-touch-icon" sizes="128x128" href="icons/icon-128_v2.png" />
+  <link rel="apple-touch-icon" sizes="96x96" href="icons/icon-96_v2.png" />
   <meta name="description" content="Arkadaş grubu yönetim uygulaması – aktivite planla, borç takip et, turnuva düzenle." />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
@@ -4135,8 +4135,23 @@
   // ================================================================
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js')
-        .then(reg => console.log('[DostOS] Service Worker kayıtlı:', reg.scope))
+      navigator.serviceWorker.register('/sw.js?v=2')
+        .then(reg => {
+          console.log('[DostOS] Service Worker kayıtlı:', reg.scope);
+          // Yeni SW'yi hemen aktifleştir
+          if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+          reg.addEventListener('updatefound', () => {
+            const newWorker = reg.installing;
+            if (newWorker) {
+              newWorker.addEventListener('statechange', () => {
+                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                  // Sayfayı yenile (cache'i temizle)
+                  window.location.reload();
+                }
+              });
+            }
+          });
+        })
         .catch(err => console.warn('[DostOS] Service Worker hatası:', err));
     });
   }
