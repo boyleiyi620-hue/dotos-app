@@ -758,6 +758,70 @@
     .modal-box .detail-item {
       display:flex; padding:6px 0; border-bottom:1px solid var(--border); font-size:14px; align-items:flex-start;
     }
+
+    /* ==================== PROFİL ==================== */
+    .pf-header {
+      position:relative; margin:-24px -24px 0; padding:30px 24px 22px;
+      background:linear-gradient(135deg, #1e1b4b 0%, #7c2d12 55%, #c2410c 100%);
+      border-radius:var(--radius) var(--radius) 0 0;
+    }
+    .pf-header::after {
+      content:''; position:absolute; inset:0;
+      background:radial-gradient(circle at 80% 20%, rgba(251,191,36,0.25) 0%, transparent 45%),
+                 radial-gradient(circle at 15% 90%, rgba(249,115,22,0.2) 0%, transparent 40%);
+      pointer-events:none;
+    }
+    .pf-top { display:flex; align-items:center; gap:16px; position:relative; }
+    .pf-avatar {
+      width:76px; height:76px; border-radius:50%; flex-shrink:0;
+      background:rgba(255,255,255,0.12); border:3px solid rgba(255,255,255,0.85);
+      display:flex; align-items:center; justify-content:center;
+      font-size:30px; font-weight:800; color:#fff;
+      box-shadow:0 8px 24px rgba(0,0,0,0.35); overflow:hidden; cursor:pointer;
+      position:relative;
+    }
+    .pf-avatar img { width:100%; height:100%; object-fit:cover; }
+    .pf-avatar .cam {
+      position:absolute; inset:auto 0 0 auto; width:26px; height:26px; border-radius:50%;
+      background:var(--accent); color:#fff; font-size:11px; display:flex; align-items:center; justify-content:center;
+      border:2px solid #fff; box-shadow:0 2px 8px rgba(0,0,0,0.4);
+    }
+    .pf-name { font-size:21px; font-weight:800; color:#fff; letter-spacing:-0.3px; }
+    .pf-code { font-size:11px; color:rgba(255,255,255,0.75); margin-top:3px; letter-spacing:1px; font-weight:600; }
+    .pf-code span { background:rgba(255,255,255,0.18); padding:2px 8px; border-radius:6px; font-family:'SF Mono', monospace; }
+    .pf-stats {
+      display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin:16px 0 0; position:relative;
+    }
+    .pf-stat {
+      background:rgba(255,255,255,0.12); backdrop-filter:blur(8px); border-radius:14px;
+      padding:12px 6px; text-align:center; border:1px solid rgba(255,255,255,0.12);
+    }
+    .pf-stat .n { font-size:20px; font-weight:800; color:#fff; }
+    .pf-stat .l { font-size:10px; color:rgba(255,255,255,0.8); text-transform:uppercase; letter-spacing:0.6px; margin-top:2px; font-weight:600; }
+    .pf-section { margin-top:18px; }
+    .pf-section h4 {
+      font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--text-muted);
+      font-weight:700; margin-bottom:10px; display:flex; align-items:center; gap:8px;
+    }
+    .pf-section h4::after { content:''; flex:1; height:1px; background:var(--border); }
+    .pf-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .pf-row { display:flex; align-items:center; gap:10px; padding:8px 0; }
+    .pf-row .l { flex:1; font-size:13px; color:var(--text-secondary); }
+    .pf-row .v { font-size:14px; font-weight:700; color:var(--text-primary); }
+    .pf-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:4px; }
+    .pf-btn {
+      display:flex; align-items:center; justify-content:center; gap:8px;
+      padding:11px 10px; border-radius:14px; font-size:12.5px; font-weight:700; cursor:pointer;
+      border:1px solid var(--border); background:var(--bg-card); color:var(--text-primary);
+      transition:var(--transition); font-family:'Inter',sans-serif;
+    }
+    .pf-btn:hover { background:var(--bg-card-hover); border-color:var(--border-hover); transform:translateY(-2px); }
+    .pf-btn i { font-size:13px; }
+    .pf-btn.primary { background:linear-gradient(135deg, var(--accent), #f59e0b); border-color:transparent; color:#fff; }
+    .pf-btn.danger { background:var(--red-dim); border-color:rgba(239,68,68,0.25); color:var(--red); }
+    .pf-btn.logout { background:var(--bg-elevated); border-color:var(--border); color:var(--text-secondary); }
+
+    .modal-box .pf-divider { height:1px; background:var(--border); margin:6px 0; }
     .modal-box .detail-item .label { font-weight:700; color:var(--text-secondary); width:80px; flex-shrink:0; margin:0; text-transform:none; letter-spacing:0; }
     .modal-box .detail-item .value { color:var(--text-primary); word-break:break-word; flex:1; }
 
@@ -2260,41 +2324,87 @@
   document.getElementById('profileBtn').addEventListener('click', showProfileModal);
   function showProfileModal() {
     const modal = document.getElementById('genericModal');
-    document.getElementById('modalTitle').innerHTML = '<i class="fas fa-user-circle text-accent"></i> Profil';
+    document.getElementById('modalTitle').style.display = 'none';
+    // Modal kapandığında diğer modallar için başlık/aksiyonları geri getir
+    const resetModalChrome = () => {
+      document.getElementById('modalTitle').style.display = '';
+      document.getElementById('modalActions').style.display = '';
+    };
+    modal.addEventListener('transitionend', resetModalChrome, { once: true });
     document.getElementById('modalSaveBtn').style.display = 'none';
-    document.getElementById('modalCloseBtn').style.display = 'inline-flex';
-    document.getElementById('modalCloseBtn').textContent = 'Kapat';
-    document.getElementById('modalCloseBtn').onclick = closeModal;
+    document.getElementById('modalCloseBtn').style.display = 'none';
+    document.getElementById('modalActions').style.display = 'none';
 
     const gd = groupData || {};
+    const displayName = (userData && userData.name) || 'Misafir';
+    const initial = (displayName || '?')[0].toUpperCase();
+    const photo = (userData && userData.photo) || '';
+    const friendCount = Object.keys(friendships || {}).length;
     const totalItems = (gd.kesfet || []).length + (gd.arenaLigler || []).length + (gd.challenges || []).length +
       (gd.expenses || []).length + (gd.bbqs || []).length + (gd.projects || []).length + (gd.feed || []).length +
       (gd.music || []).length + (gd.games || []).length + (gd.giftfunds || []).length + (gd.albums || []).length +
       (gd.inventory || []).length + (gd.debts || []).length;
-    const friendCount = Object.keys(friendships).length;
+
     const body = document.getElementById('modalBody');
     body.innerHTML = `
-      <div class="detail-item"><span class="label">İsim</span><span class="value">${escapeHtml(userData?.name || 'Misafir')}</span></div>
-      <div class="detail-item"><span class="label">Arkadaş Kodu</span><span class="value" style="font-size:12px;letter-spacing:.5px;">${escapeHtml(userData?.friendCode || '-')}</span></div>
-      <div class="detail-item"><span class="label">Arkadaşlar</span><span class="value">${friendCount}</span></div>
-      <div class="detail-item"><span class="label">Toplam Öğe</span><span class="value">${totalItems}</span></div>
-      <div class="detail-item"><span class="label">Ligler</span><span class="value">${(gd.arenaLigler || []).length}</span></div>
-      <div class="detail-item"><span class="label">Meydan Okuma</span><span class="value">${(gd.challenges || []).length}</span></div>
-      <div class="detail-item"><span class="label">İşlemler</span><span class="value">${(gd.expenses || []).length}</span></div>
-      <div class="detail-item"><span class="label">Mangal</span><span class="value">${(gd.bbqs || []).length}</span></div>
-      <div class="detail-item"><span class="label">Proje</span><span class="value">${(gd.projects || []).length}</span></div>
-      <div class="detail-item"><span class="label">Albüm</span><span class="value">${(gd.albums || []).length}</span></div>
-      <div class="detail-item"><span class="label">Ekipman</span><span class="value">${(gd.inventory || []).length}</span></div>
-      <div class="detail-item"><span class="label">Borç</span><span class="value">${(gd.debts || []).length}</span></div>
-      <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">
-        <button class="btn btn-primary btn-sm" onclick="showFriendModal()">👥 Arkadaş Yönetimi</button>
-        <button class="btn btn-outline btn-sm" onclick="exportAllData()">📤 Veriyi Dışa Aktar</button>
-        <button class="btn btn-outline btn-sm" onclick="importAllData()">📥 Veriyi İçe Aktar</button>
-        <button class="btn btn-red btn-sm" onclick="resetAllData()">🗑️ Sıfırla</button>
-        <button class="btn btn-red btn-sm" onclick="handleLogout()">🚪 Çıkış Yap</button>
+      <div class="pf-header">
+        <div class="pf-top">
+          <div class="pf-avatar" id="pfAvatar">
+            ${photo ? `<img src="${photo}" />` : initial}
+            <div class="cam"><i class="fas fa-camera"></i></div>
+          </div>
+          <div style="min-width:0;flex:1;">
+            <div class="pf-name">${escapeHtml(displayName)}</div>
+            <div class="pf-code">Kod <span>${escapeHtml((userData && userData.friendCode) || '—')}</span></div>
+          </div>
+          <button class="action-btn" onclick="closeModal()" title="Kapat" style="flex-shrink:0;"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="pf-stats">
+          <div class="pf-stat"><div class="n">${friendCount}</div><div class="l">Arkadaş</div></div>
+          <div class="pf-stat"><div class="n">${totalItems}</div><div class="l">Toplam</div></div>
+          <div class="pf-stat"><div class="n">${(gd.arenaLigler || []).length}</div><div class="l">Lig</div></div>
+        </div>
+      </div>
+
+      <div class="pf-section" style="margin-top:18px;">
+        <h4>Özet</h4>
+        <div class="pf-row"><span class="l"><i class="fas fa-trophy" style="color:var(--gold);width:20px;"></i>Ligler</span><span class="v">${(gd.arenaLigler || []).length}</span></div>
+        <div class="pf-row"><span class="l"><i class="fas fa-dumbbell" style="color:var(--blue);width:20px;"></i>Meydan Okuma</span><span class="v">${(gd.challenges || []).length}</span></div>
+        <div class="pf-row"><span class="l"><i class="fas fa-coins" style="color:var(--green);width:20px;"></i>İşlemler</span><span class="v">${(gd.expenses || []).length}</span></div>
+        <div class="pf-row"><span class="l"><i class="fas fa-fire" style="color:var(--accent);width:20px;"></i>Mangal</span><span class="v">${(gd.bbqs || []).length}</span></div>
+        <div class="pf-row"><span class="l"><i class="fas fa-folder" style="color:var(--purple);width:20px;"></i>Projeler</span><span class="v">${(gd.projects || []).length}</span></div>
+        <div class="pf-row"><span class="l"><i class="fas fa-images" style="color:var(--cyan);width:20px;"></i>Albümler</span><span class="v">${(gd.albums || []).length}</span></div>
+        <div class="pf-row"><span class="l"><i class="fas fa-boxes-stacked" style="color:var(--text-muted);width:20px;"></i>Ekipman</span><span class="v">${(gd.inventory || []).length}</span></div>
+        <div class="pf-row"><span class="l"><i class="fas fa-hand-holding-usd" style="color:var(--red);width:20px;"></i>Borç Kaydı</span><span class="v">${(gd.debts || []).length}</span></div>
+      </div>
+
+      <div class="pf-section">
+        <h4>Aksiyonlar</h4>
+        <div class="pf-actions">
+          <button class="pf-btn primary" onclick="showFriendModal()"><i class="fas fa-user-plus"></i>Arkadaşlar</button>
+          <button class="pf-btn" onclick="exportAllData()"><i class="fas fa-file-export"></i>Dışa Aktar</button>
+          <button class="pf-btn" onclick="importAllData()"><i class="fas fa-file-import"></i>İçe Aktar</button>
+          <button class="pf-btn danger" onclick="resetAllData()"><i class="fas fa-trash-alt"></i>Sıfırla</button>
+        </div>
+      </div>
+
+      <div style="margin-top:14px;">
+        <button class="pf-btn logout" style="width:100%;" onclick="handleLogout()"><i class="fas fa-right-from-bracket"></i>Çıkış Yap</button>
       </div>
     `;
+
+    // Profil fotoğrafı değiştirme (avatar'a dokununca)
+    const pfAvatar = document.getElementById('pfAvatar');
+    if (pfAvatar) pfAvatar.addEventListener('click', () => {
+      const photoInput = document.getElementById('photoInput');
+      if (photoInput) photoInput.click();
+    });
     modal.classList.add('open');
+    // Fotoğraf yüklendiğinde profili tazele
+    const photoInput = document.getElementById('photoInput');
+    if (photoInput) {
+      photoInput.onchange = () => { setTimeout(showProfileModal, 150); };
+    }
   }
 
   function exportAllData() {
