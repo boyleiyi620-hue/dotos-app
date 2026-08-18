@@ -1,5 +1,5 @@
-// DostOS Service Worker v2.0
-const CACHE_NAME = 'dostos-v2';
+// DostOS Service Worker v3.0 (iOS beyaz boşluk düzeltmesi)
+const CACHE_NAME = 'dostos-v3';
 const STATIC_ASSETS = [
   './',
   './index.html',

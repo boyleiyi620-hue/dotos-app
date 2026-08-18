@@ -68,7 +68,11 @@
     }
     html, body {
       height:100%; font-family:'Inter', -apple-system, sans-serif;
-      background: radial-gradient(ellipse at top, #0f172a 0%, #020617 100%);
+      /* iOS'ta alttaki beyaz boşluğu önlemek için düz koyu renk + gradient overlay */
+      background-color:#020617;
+      background-image: radial-gradient(ellipse at top, #0f172a 0%, #020617 60%);
+      background-size:100% 100%;
+      background-repeat:no-repeat;
       color:var(--text-primary); overflow:hidden;
       -webkit-tap-highlight-color:transparent;
       /* iOS PWA safe area desteği */
@@ -78,6 +82,12 @@
       width:100%;
       top:0;
       left:0;
+    }
+    /* iOS standalone'da alttaki beyaz boşluğu kesin olarak kapat */
+    body::after {
+      content:''; position:fixed; left:0; right:0; bottom:0;
+      width:100%; height:var(--safe-bottom, 0px);
+      background:#070b14; z-index:1; pointer-events:none;
     }
     input, select, textarea, button {
       user-select: text !important;
@@ -120,9 +130,9 @@
     /* iOS'ta body height'ı sabit tut */
     @supports (-webkit-touch-callout: none) {
       #app {
-        height:100vh;
-        min-height:100vh;
-        max-height:100vh;
+        height:100dvh;
+        min-height:100dvh;
+        max-height:100dvh;
       }
       html, body {
         overflow:hidden !important;
@@ -873,7 +883,7 @@
 
     .section-title .actions .see-all:last-child { margin-left:0; }
 
-    /* iOS PWA Standalone Mode - SABİT EKRAN BOYUTU */
+    /* iOS PWA Standalone Mode - TAM EKRAN */
     @media screen and (display-mode: standalone) {
       html, body {
         padding-top: env(safe-area-inset-top, 0px);
@@ -883,9 +893,9 @@
         width:100%;
       }
       #app {
-        height:100vh !important;
-        min-height:100vh !important;
-        max-height:100vh !important;
+        height:100dvh !important;
+        min-height:100dvh !important;
+        max-height:100dvh !important;
         border-radius:0;
         box-shadow:none;
         overflow:hidden !important;
@@ -917,17 +927,17 @@
     }
     @supports (-webkit-touch-callout: none) {
       html, body { 
-        height:100vh;
-        min-height:100vh;
+        height:100dvh;
+        min-height:100dvh;
         overflow:hidden !important; 
         position:fixed !important;
         top:0; left:0; right:0; bottom:0;
         width:100%;
       }
       #app { 
-        height:100vh;
-        min-height:100vh;
-        max-height:100vh;
+        height:100dvh;
+        min-height:100dvh;
+        max-height:100dvh;
         overflow:hidden !important;
         display:flex !important;
         flex-direction:column;
@@ -1227,6 +1237,35 @@
 <input type="file" id="albumFileInput" accept="image/*" multiple style="display:none;" />
 
 <script>
+  // ================================================================
+  // iOS SAFARI / PWA VIEWPORT DÜZELTMESİ
+  // iOS standalone PWA'da alttaki beyaz boşluğu önlemek için
+  // viewport yüksekliğini innerHeight ile dinamik olarak ayarlar
+  // ================================================================
+  (function fixIOSViewport() {
+    function setViewportHeight() {
+      // iOS'ta 100vh / 100dvh değerini innerHeight ile garantiye al
+      var vh = window.innerHeight + 'px';
+      var vw = window.innerWidth + 'px';
+      document.documentElement.style.height = vh;
+      document.documentElement.style.minHeight = vh;
+      document.body.style.height = vh;
+      document.body.style.minHeight = vh;
+      document.body.style.width = vw;
+      var app = document.getElementById('app');
+      if (app) {
+        app.style.height = vh;
+        app.style.minHeight = vh;
+        app.style.maxHeight = vh;
+      }
+      // CSS değişkenine de yaz (fallback kullanımı için)
+      document.documentElement.style.setProperty('--vh-px', vh);
+    }
+    setViewportHeight();
+    window.addEventListener('resize', setViewportHeight);
+    window.addEventListener('orientationchange', function() { setTimeout(setViewportHeight, 100); });
+  })();
+
   // ================================================================
   // FIREBASE CONFIGURATION
   // ================================================================
@@ -4136,7 +4175,7 @@
   // ================================================================
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js?v=2')
+      navigator.serviceWorker.register('/sw.js?v=3')
         .then(reg => {
           console.log('[DostOS] Service Worker kayıtlı:', reg.scope);
           // Yeni SW'yi hemen aktifleştir
