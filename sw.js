@@ -1,5 +1,5 @@
 // DostOS Service Worker v4.0 (iOS düzeltme + fonksiyon hataları)
-const CACHE_NAME = 'dostos-v4';
+const CACHE_NAME = 'dostos-v5';
 const STATIC_ASSETS = [
   './',
   './index.html',

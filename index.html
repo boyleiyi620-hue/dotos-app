@@ -761,65 +761,95 @@
 
     /* ==================== PROFİL ==================== */
     .pf-header {
-      position:relative; margin:-24px -24px 0; padding:30px 24px 22px;
-      background:linear-gradient(135deg, #1e1b4b 0%, #7c2d12 55%, #c2410c 100%);
+      position:relative; margin:-24px -24px 0; padding:34px 26px 26px;
+      background:linear-gradient(140deg, #3b0f57 0%, #6d28d9 45%, #f97316 100%);
       border-radius:var(--radius) var(--radius) 0 0;
+      overflow:hidden;
+    }
+    /* dekoratif yumuşak ışık halkaları */
+    .pf-header::before {
+      content:''; position:absolute; width:220px; height:220px; border-radius:50%;
+      background:radial-gradient(circle, rgba(255,255,255,0.16) 0%, transparent 65%);
+      top:-90px; right:-70px; pointer-events:none;
     }
     .pf-header::after {
-      content:''; position:absolute; inset:0;
-      background:radial-gradient(circle at 80% 20%, rgba(251,191,36,0.25) 0%, transparent 45%),
-                 radial-gradient(circle at 15% 90%, rgba(249,115,22,0.2) 0%, transparent 40%);
-      pointer-events:none;
+      content:''; position:absolute; width:180px; height:180px; border-radius:50%;
+      background:radial-gradient(circle, rgba(251,191,36,0.22) 0%, transparent 65%);
+      bottom:-80px; left:-60px; pointer-events:none;
+    }
+    .pf-header .pf-grid-bg {
+      position:absolute; inset:0; opacity:0.06; pointer-events:none;
+      background-image:linear-gradient(rgba(255,255,255,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.4) 1px, transparent 1px);
+      background-size:22px 22px;
     }
     .pf-top { display:flex; align-items:center; gap:16px; position:relative; }
     .pf-avatar {
-      width:76px; height:76px; border-radius:50%; flex-shrink:0;
-      background:rgba(255,255,255,0.12); border:3px solid rgba(255,255,255,0.85);
+      width:74px; height:74px; border-radius:22px; flex-shrink:0;
+      background:rgba(255,255,255,0.15); border:2.5px solid rgba(255,255,255,0.9);
       display:flex; align-items:center; justify-content:center;
       font-size:30px; font-weight:800; color:#fff;
-      box-shadow:0 8px 24px rgba(0,0,0,0.35); overflow:hidden; cursor:pointer;
-      position:relative;
+      box-shadow:0 10px 30px rgba(0,0,0,0.4); overflow:hidden; cursor:pointer;
+      position:relative; transition:transform 0.25s ease;
     }
+    .pf-avatar:hover { transform:scale(1.05); }
     .pf-avatar img { width:100%; height:100%; object-fit:cover; }
     .pf-avatar .cam {
       position:absolute; inset:auto 0 0 auto; width:26px; height:26px; border-radius:50%;
-      background:var(--accent); color:#fff; font-size:11px; display:flex; align-items:center; justify-content:center;
-      border:2px solid #fff; box-shadow:0 2px 8px rgba(0,0,0,0.4);
+      background:#fff; color:#7c3aed; font-size:11px; display:flex; align-items:center; justify-content:center;
+      box-shadow:0 3px 10px rgba(0,0,0,0.35);
     }
-    .pf-name { font-size:21px; font-weight:800; color:#fff; letter-spacing:-0.3px; }
-    .pf-code { font-size:11px; color:rgba(255,255,255,0.75); margin-top:3px; letter-spacing:1px; font-weight:600; }
-    .pf-code span { background:rgba(255,255,255,0.18); padding:2px 8px; border-radius:6px; font-family:'SF Mono', monospace; }
+    .pf-name { font-size:22px; font-weight:800; color:#fff; letter-spacing:-0.3px; line-height:1.1; }
+    .pf-welcome { font-size:11.5px; color:rgba(255,255,255,0.7); margin-top:3px; font-weight:500; }
+    .pf-code { font-size:11px; color:rgba(255,255,255,0.8); margin-top:8px; font-weight:600; display:flex; align-items:center; gap:8px; }
+    .pf-code span { background:rgba(0,0,0,0.28); padding:3px 10px; border-radius:8px; font-family:'SF Mono', monospace; letter-spacing:0.8px; }
+    .pf-copy { background:none !important; border:none; color:#fff; cursor:pointer; padding:0; font-size:12px; opacity:0.75; }
     .pf-stats {
-      display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin:16px 0 0; position:relative;
+      display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin:18px 0 0; position:relative;
     }
     .pf-stat {
-      background:rgba(255,255,255,0.12); backdrop-filter:blur(8px); border-radius:14px;
-      padding:12px 6px; text-align:center; border:1px solid rgba(255,255,255,0.12);
+      background:rgba(255,255,255,0.14); backdrop-filter:blur(10px); border-radius:16px;
+      padding:12px 4px; text-align:center; border:1px solid rgba(255,255,255,0.18);
+      transition:transform 0.25s ease;
     }
+    .pf-stat:hover { transform:translateY(-2px); }
     .pf-stat .n { font-size:20px; font-weight:800; color:#fff; }
-    .pf-stat .l { font-size:10px; color:rgba(255,255,255,0.8); text-transform:uppercase; letter-spacing:0.6px; margin-top:2px; font-weight:600; }
-    .pf-section { margin-top:18px; }
+    .pf-stat .l { font-size:10px; color:rgba(255,255,255,0.75); text-transform:uppercase; letter-spacing:0.6px; margin-top:2px; font-weight:600; }
+    .pf-section { margin-top:20px; }
     .pf-section h4 {
-      font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--text-muted);
-      font-weight:700; margin-bottom:10px; display:flex; align-items:center; gap:8px;
+      font-size:11px; text-transform:uppercase; letter-spacing:1.2px; color:var(--accent);
+      font-weight:800; margin-bottom:10px; display:flex; align-items:center; gap:10px;
     }
-    .pf-section h4::after { content:''; flex:1; height:1px; background:var(--border); }
-    .pf-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-    .pf-row { display:flex; align-items:center; gap:10px; padding:8px 0; }
-    .pf-row .l { flex:1; font-size:13px; color:var(--text-secondary); }
+    .pf-section h4::after { content:''; flex:1; height:1px; background:linear-gradient(90deg, var(--border), transparent); }
+    .pf-row {
+      display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:12px;
+      margin-bottom:3px; transition:background 0.2s ease;
+    }
+    .pf-row:hover { background:var(--bg-elevated); }
+    .pf-row .l { flex:1; font-size:13.5px; color:var(--text-secondary); display:flex; align-items:center; gap:10px; }
+    .pf-row .l i { width:18px; text-align:center; }
     .pf-row .v { font-size:14px; font-weight:700; color:var(--text-primary); }
-    .pf-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:4px; }
+    .pf-row .v .badge-dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--accent); margin-right:7px; }
+    .pf-actions { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:6px; }
     .pf-btn {
       display:flex; align-items:center; justify-content:center; gap:8px;
-      padding:11px 10px; border-radius:14px; font-size:12.5px; font-weight:700; cursor:pointer;
+      padding:13px 10px; border-radius:14px; font-size:13px; font-weight:700; cursor:pointer;
       border:1px solid var(--border); background:var(--bg-card); color:var(--text-primary);
-      transition:var(--transition); font-family:'Inter',sans-serif;
+      transition:all 0.25s ease; font-family:'Inter',sans-serif; position:relative; overflow:hidden;
     }
-    .pf-btn:hover { background:var(--bg-card-hover); border-color:var(--border-hover); transform:translateY(-2px); }
+    .pf-btn::after {
+      content:''; position:absolute; inset:0; opacity:0;
+      background:linear-gradient(120deg, transparent, rgba(255,255,255,0.08), transparent);
+      transition:opacity 0.25s ease;
+    }
+    .pf-btn:hover { border-color:var(--accent); box-shadow:0 6px 20px rgba(249,115,22,0.15); transform:translateY(-2px); }
+    .pf-btn:hover::after { opacity:1; }
+    .pf-btn:active { transform:scale(0.97); }
     .pf-btn i { font-size:13px; }
     .pf-btn.primary { background:linear-gradient(135deg, var(--accent), #f59e0b); border-color:transparent; color:#fff; }
+    .pf-btn.primary:hover { box-shadow:0 6px 20px rgba(249,115,22,0.4); border-color:transparent; }
     .pf-btn.danger { background:var(--red-dim); border-color:rgba(239,68,68,0.25); color:var(--red); }
-    .pf-btn.logout { background:var(--bg-elevated); border-color:var(--border); color:var(--text-secondary); }
+    .pf-btn.logout { background:transparent; border-color:var(--border); color:var(--text-muted); }
+    .pf-btn.logout:hover { color:var(--red); border-color:rgba(239,68,68,0.4); }
 
     .modal-box .pf-divider { height:1px; background:var(--border); margin:6px 0; }
     .modal-box .detail-item .label { font-weight:700; color:var(--text-secondary); width:80px; flex-shrink:0; margin:0; text-transform:none; letter-spacing:0; }
@@ -2348,6 +2378,7 @@
     const body = document.getElementById('modalBody');
     body.innerHTML = `
       <div class="pf-header">
+        <div class="pf-grid-bg"></div>
         <div class="pf-top">
           <div class="pf-avatar" id="pfAvatar">
             ${photo ? `<img src="${photo}" />` : initial}
@@ -2355,31 +2386,32 @@
           </div>
           <div style="min-width:0;flex:1;">
             <div class="pf-name">${escapeHtml(displayName)}</div>
-            <div class="pf-code">Kod <span>${escapeHtml((userData && userData.friendCode) || '—')}</span></div>
+            <div class="pf-welcome">DostOS hesabın 👋</div>
+            <div class="pf-code"><i class="fas fa-qrcode" style="opacity:0.7;"></i><span>${escapeHtml((userData && userData.friendCode) || '—')}</span><button class="pf-copy" onclick="copyFriendCode()" title="Kodu kopyala"><i class="fas fa-copy"></i></button></div>
           </div>
-          <button class="action-btn" onclick="closeModal()" title="Kapat" style="flex-shrink:0;"><i class="fas fa-times"></i></button>
+          <button class="action-btn" onclick="closeModal()" title="Kapat" style="flex-shrink:0;background:rgba(255,255,255,0.15);"><i class="fas fa-times" style="color:#fff;"></i></button>
         </div>
         <div class="pf-stats">
           <div class="pf-stat"><div class="n">${friendCount}</div><div class="l">Arkadaş</div></div>
-          <div class="pf-stat"><div class="n">${totalItems}</div><div class="l">Toplam</div></div>
+          <div class="pf-stat"><div class="n">${totalItems}</div><div class="l">Öğe</div></div>
           <div class="pf-stat"><div class="n">${(gd.arenaLigler || []).length}</div><div class="l">Lig</div></div>
         </div>
       </div>
 
-      <div class="pf-section" style="margin-top:18px;">
-        <h4>Özet</h4>
-        <div class="pf-row"><span class="l"><i class="fas fa-trophy" style="color:var(--gold);width:20px;"></i>Ligler</span><span class="v">${(gd.arenaLigler || []).length}</span></div>
-        <div class="pf-row"><span class="l"><i class="fas fa-dumbbell" style="color:var(--blue);width:20px;"></i>Meydan Okuma</span><span class="v">${(gd.challenges || []).length}</span></div>
-        <div class="pf-row"><span class="l"><i class="fas fa-coins" style="color:var(--green);width:20px;"></i>İşlemler</span><span class="v">${(gd.expenses || []).length}</span></div>
-        <div class="pf-row"><span class="l"><i class="fas fa-fire" style="color:var(--accent);width:20px;"></i>Mangal</span><span class="v">${(gd.bbqs || []).length}</span></div>
-        <div class="pf-row"><span class="l"><i class="fas fa-folder" style="color:var(--purple);width:20px;"></i>Projeler</span><span class="v">${(gd.projects || []).length}</span></div>
-        <div class="pf-row"><span class="l"><i class="fas fa-images" style="color:var(--cyan);width:20px;"></i>Albümler</span><span class="v">${(gd.albums || []).length}</span></div>
-        <div class="pf-row"><span class="l"><i class="fas fa-boxes-stacked" style="color:var(--text-muted);width:20px;"></i>Ekipman</span><span class="v">${(gd.inventory || []).length}</span></div>
-        <div class="pf-row"><span class="l"><i class="fas fa-hand-holding-usd" style="color:var(--red);width:20px;"></i>Borç Kaydı</span><span class="v">${(gd.debts || []).length}</span></div>
+      <div class="pf-section">
+        <h4><i class="fas fa-chart-pie"></i> Aktivite Özeti</h4>
+        <div class="pf-row"><span class="l"><i class="fas fa-trophy" style="color:#fbbf24;"></i>Ligler</span><span class="v">${(gd.arenaLigler || []).length}</span></div>
+        <div class="pf-row"><span class="l"><i class="fas fa-dumbbell" style="color:#60a5fa;"></i>Meydan Okuma</span><span class="v">${(gd.challenges || []).length}</span></div>
+        <div class="pf-row"><span class="l"><i class="fas fa-coins" style="color:#34d399;"></i>İşlemler</span><span class="v">${(gd.expenses || []).length}</span></div>
+        <div class="pf-row"><span class="l"><i class="fas fa-fire" style="color:#fb923c;"></i>Mangal</span><span class="v">${(gd.bbqs || []).length}</span></div>
+        <div class="pf-row"><span class="l"><i class="fas fa-folder" style="color:#c084fc;"></i>Projeler</span><span class="v">${(gd.projects || []).length}</span></div>
+        <div class="pf-row"><span class="l"><i class="fas fa-images" style="color:#67e8f9;"></i>Albümler</span><span class="v">${(gd.albums || []).length}</span></div>
+        <div class="pf-row"><span class="l"><i class="fas fa-boxes-stacked" style="color:#9ca3af;"></i>Ekipman</span><span class="v">${(gd.inventory || []).length}</span></div>
+        <div class="pf-row"><span class="l"><i class="fas fa-hand-holding-usd" style="color:#f87171;"></i>Borç Kaydı</span><span class="v">${(gd.debts || []).length}</span></div>
       </div>
 
       <div class="pf-section">
-        <h4>Aksiyonlar</h4>
+        <h4><i class="fas fa-bolt"></i> Hızlı Aksiyonlar</h4>
         <div class="pf-actions">
           <button class="pf-btn primary" onclick="showFriendModal()"><i class="fas fa-user-plus"></i>Arkadaşlar</button>
           <button class="pf-btn" onclick="exportAllData()"><i class="fas fa-file-export"></i>Dışa Aktar</button>
@@ -2388,7 +2420,7 @@
         </div>
       </div>
 
-      <div style="margin-top:14px;">
+      <div style="margin-top:16px;">
         <button class="pf-btn logout" style="width:100%;" onclick="handleLogout()"><i class="fas fa-right-from-bracket"></i>Çıkış Yap</button>
       </div>
     `;
@@ -2399,6 +2431,20 @@
       const photoInput = document.getElementById('photoInput');
       if (photoInput) photoInput.click();
     });
+
+    // Arkadaş kodunu kopyalama
+    window.copyFriendCode = () => {
+      const code = (userData && userData.friendCode) || '';
+      if (!code) return showToast('Arkadaş kodunuz yok.', 'fa-exclamation-circle');
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(code).then(() => showToast('Arkadaş kodu kopyalandı!', 'fa-check-circle'));
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = code; document.body.appendChild(ta); ta.select();
+        document.execCommand('copy'); document.body.removeChild(ta);
+        showToast('Arkadaş kodu kopyalandı!', 'fa-check-circle');
+      }
+    };
     modal.classList.add('open');
     // Fotoğraf yüklendiğinde profili tazele
     const photoInput = document.getElementById('photoInput');
@@ -4410,7 +4456,7 @@
   // ================================================================
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js?v=4')
+      navigator.serviceWorker.register('/sw.js?v=5')
         .then(reg => {
           console.log('[DostOS] Service Worker kayıtlı:', reg.scope);
           // Yeni SW'yi hemen aktifleştir
