@@ -1042,8 +1042,9 @@
     <div class="header-actions">
       <div id="userDisplay" style="display:none;align-items:center;gap:6px;margin-right:6px;">
         <span style="font-size:12px;font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60px;" id="userNameDisplay">Kullanıcı</span>
-        <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--gold));display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;color:#fff;flex-shrink:0;" id="userAvatar">K</div>
+        <div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--gold));display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;color:#fff;flex-shrink:0;cursor:pointer;position:relative;overflow:hidden;border:2px solid rgba(249,115,22,0.4);" id="userAvatar" title="Profil fotoğrafı değiştirmek için dokunun">K</div>
       </div>
+      <input type="file" id="photoInput" accept="image/*" style="display:none;" />
       <button class="action-btn" id="notifBtn" title="Bildirimler">
         <i class="fas fa-bell"></i>
         <span class="badge" id="notifBadge">0</span>
@@ -1288,6 +1289,44 @@
     setViewportHeight();
     window.addEventListener('resize', setViewportHeight);
     window.addEventListener('orientationchange', function() { setTimeout(setViewportHeight, 100); });
+  })();
+
+  // ================================================================
+  // PROFİL FOTOĞRAFI YÜKLEME (base64 ile local + Firebase)
+  // ================================================================
+  (function setupPhotoUpload() {
+    const avatar = document.getElementById('userAvatar');
+    const photoInput = document.getElementById('photoInput');
+    if (!avatar || !photoInput) return;
+    avatar.addEventListener('click', () => {
+      if (!currentUser) return showLoginModal();
+      photoInput.click();
+    });
+    photoInput.addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      if (file.size > 2 * 1024 * 1024) {
+        showToast('Fotoğraf en fazla 2 MB olabilir.', 'fa-exclamation-circle');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const photo = reader.result;
+        if (userData) userData.photo = photo;
+        // LocalStorage kullanıcı kaydına da işle
+        const users = JSON.parse(localStorage.getItem('dostos_users') || '{}');
+        if (users[currentUser.uid]) users[currentUser.uid].photo = photo;
+        localStorage.setItem('dostos_users', JSON.stringify(users));
+        // Firebase'e de kaydet
+        if (firebaseConfigured && db) {
+          db.ref('users/' + currentUser.uid).update({ photo }).catch(() => {});
+        }
+        updateUserDisplay();
+        showToast('Profil fotoğrafı güncellendi!', 'fa-check-circle');
+      };
+      reader.onerror = () => showToast('Fotoğraf okunamadı.', 'fa-exclamation-circle');
+      reader.readAsDataURL(file);
+    });
   })();
 
   // ================================================================
@@ -1753,16 +1792,24 @@
     }
   }
 
-  function updateUserDisplay() {
+    function updateUserDisplay() {
     const userDisplay = document.getElementById('userDisplay');
     const userNameDisplay = document.getElementById('userNameDisplay');
     const userAvatar = document.getElementById('userAvatar');
-    
     if (userDisplay && userNameDisplay && userAvatar) {
       userDisplay.style.display = 'flex';
-      const displayN = userData.name || currentUser.displayName || 'Kullanıcı';
+      const displayN = (userData && userData.name) || (currentUser && currentUser.displayName) || 'Kullanıcı';
       userNameDisplay.textContent = displayN;
-      userAvatar.textContent = displayN[0].toUpperCase();
+      // Profil fotoğrafı varsa göster, yoksa adın baş harfi
+      const photo = (userData && userData.photo) || '';
+      if (photo) {
+        userAvatar.innerHTML = `<img src="${photo}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" />`;
+      } else {
+        userAvatar.textContent = (displayN || '?')[0].toUpperCase();
+      }
+      // Başlıkta görünen adı da güncelle (varsa)
+      const headerName = document.getElementById('headerName');
+      if (headerName) headerName.textContent = displayN;
     }
   }
 
@@ -2721,17 +2768,24 @@
   }
 
 
+  function teamKey(name) {
+    // Takım adı eşleştirmesi: baş/son boşlukları kırp, küçük harfe, Türkçe karakterleri normalleştir
+    return String(name || '').trim().toLowerCase('tr-TR');
+  }
+
   function calculateStandings(lig) {
     if (!lig || !lig.matches || !lig.matches.length) return;
     // Standings'i sıfırla
     if (lig.standings) {
       lig.standings.forEach(s => { s.o = 0; s.g = 0; s.b = 0; s.m = 0; s.p = 0; });
     }
-    // Her maçtan puanları hesapla
+    // Her maçtan puanları hesapla (takım adlarını normalleştirilmiş biçimde eşleştir)
     lig.matches.forEach(match => {
       if (!lig.standings) return;
-      const home = lig.standings.find(s => s.team === match.home);
-      const away = lig.standings.find(s => s.team === match.away);
+      const homeKey = teamKey(match.home);
+      const awayKey = teamKey(match.away);
+      const home = lig.standings.find(s => teamKey(s.team) === homeKey);
+      const away = lig.standings.find(s => teamKey(s.team) === awayKey);
       if (home) {
         home.o = (home.o || 0) + 1;
         if (match.homeScore > match.awayScore) {
@@ -2757,9 +2811,13 @@
         }
       }
     });
-    // Standings'i puana göre sırala
+    // Standings'i puana göre sırala (puan, galibiyet, averaj)
     if (lig.standings) {
-      lig.standings.sort((a, b) => (b.p || 0) - (a.p || 0) || (b.g || 0) - (a.g || 0) || ((a.g || 0) - (a.m || 0)) - ((b.g || 0) - (b.m || 0)));
+      lig.standings.sort((a, b) =>
+        (b.p || 0) - (a.p || 0) ||
+        (b.g || 0) - (a.g || 0) ||
+        ((b.g || 0) - (b.m || 0)) - ((a.g || 0) - (a.m || 0))
+      );
     }
   }
 
@@ -2788,8 +2846,11 @@
         matchesHtml += matches.slice(-5).reverse().map(m => `
           <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 8px;background:var(--bg-elevated);border-radius:8px;margin-bottom:4px;font-size:11px;">
             <span style="color:var(--text-secondary);font-weight:600;flex:1;text-align:right;">${escapeHtml(m.home)}</span>
-            <span style="font-weight:800;color:var(--accent);padding:0 8px;">${m.homeScore || 0} - ${m.awayScore || 0}</span>
-            <span style="color:var(--text-secondary);font-weight:600;flex:1;text-align:left;">${escapeHtml(m.away)}</span>
+            <span style="font-weight:800;color:var(--accent);padding:0 8px;">${Number(m.homeScore) || 0} - ${Number(m.awayScore) || 0}</span>
+            <div style="flex:1;text-align:left;display:flex;align-items:center;gap:6px;">
+              <span style="color:var(--text-secondary);font-weight:600;">${escapeHtml(m.away)}</span>
+              <i class="fas fa-trash-alt" style="color:var(--red);cursor:pointer;font-size:11px;" onclick="event.stopPropagation();deleteMatch('${lig.id}','${m.id}')" title="Maçı sil"></i>
+            </div>
           </div>
         `).join('');
         matchesHtml += `</div>`;
@@ -2836,8 +2897,8 @@
     document.getElementById('modalBody').innerHTML = `
       <label>Ev Sahibi</label><select id="m_home">${teamOptions}</select>
       <label>Deplasman</label><select id="m_away">${teamOptions}</select>
-      <label>Skor (Ev)</label><input id="m_homeScore" type="text" value="0" />
-      <label>Skor (Dep)</label><input id="m_awayScore" type="text" value="0" />
+      <label>Skor (Ev)</label><input id="m_homeScore" type="number" inputmode="numeric" min="0" value="0" />
+      <label>Skor (Dep)</label><input id="m_awayScore" type="number" inputmode="numeric" min="0" value="0" />
       <label>Tarih</label><input id="m_date" type="date" />
     `;
 
@@ -2845,8 +2906,10 @@
       const home = document.getElementById('m_home').value;
       const away = document.getElementById('m_away').value;
       if (!home || !away || home === away) { showToast('Geçerli takımlar seçin.', 'fa-exclamation-circle'); return; }
-      const homeScore = Number(document.getElementById('m_homeScore').value) || 0;
-      const awayScore = Number(document.getElementById('m_awayScore').value) || 0;
+      let homeScore = Number(document.getElementById('m_homeScore').value);
+      let awayScore = Number(document.getElementById('m_awayScore').value);
+      if (!isFinite(homeScore) || homeScore < 0) homeScore = 0;
+      if (!isFinite(awayScore) || awayScore < 0) awayScore = 0;
       if (!lig.matches) lig.matches = [];
       lig.matches.push({
         id: generateId(), home, away,
@@ -2861,6 +2924,19 @@
       closeModal();
     };
     modal.classList.add('open');
+  }
+
+  function deleteMatch(ligId, matchId) {
+    const lig = findGroupItem('arenaLigler', ligId);
+    if (!lig || !lig.matches) return;
+    const m = lig.matches.find(x => x.id === matchId);
+    if (!m) return;
+    if (!confirm(`"${m.home} ${m.homeScore} - ${m.awayScore} ${m.away}" maçını silmek istediğinize emin misiniz? Puan durumu yeniden hesaplanacak.`)) return;
+    lig.matches = lig.matches.filter(x => x.id !== matchId);
+    calculateStandings(lig);
+    lig.updatedAt = new Date().toISOString();
+    saveGroupData();
+    addNotification(`🗑️ ${m.home} - ${m.away} maçı silindi, puan durumu güncellendi.`);
   }
 
   function openTeamModal(ligId) {
@@ -3144,8 +3220,8 @@
       summary.innerHTML = '';
       return;
     }
-    const totalOwed = debts.filter(d => d.status !== 'Ödendi').reduce((s, d) => s + d.amount, 0);
-    const totalPaid = debts.filter(d => d.status === 'Ödendi').reduce((s, d) => s + d.amount, 0);
+    const totalOwed = debts.filter(d => d.status !== 'Ödendi').reduce((s, d) => s + (Number(d.amount) || 0), 0);
+    const totalPaid = debts.filter(d => d.status === 'Ödendi').reduce((s, d) => s + (Number(d.amount) || 0), 0);
     summary.innerHTML = `
       <div class="stats-grid" style="margin-bottom:0;">
         <div class="stat-item"><div class="number" style="color:var(--red);">₺${totalOwed}</div><div class="label">Bekleyen</div></div>
@@ -3162,7 +3238,7 @@
           <div class="fs-12 fw-700">${escapeHtml(debt.from)} <span class="debt-arrow">→</span> ${escapeHtml(debt.to)}</div>
           <div class="fs-11 text-muted">${escapeHtml(debt.reason || 'Borç')}</div>
         </div>
-        <div class="debt-amount ${debt.status === 'Ödendi' ? 'paid' : 'owed'}">Ödendi</div>
+        <div class="debt-amount ${debt.status === 'Ödendi' ? 'paid' : 'owed'}">${debt.status === 'Ödendi' ? '✓ Ödendi' : '₺' + Number(debt.amount || 0).toLocaleString('tr-TR')}</div>
         <div class="action-buttons" onclick="event.stopPropagation();">
           ${debt.status !== 'Ödendi' ? `<button class="btn-icon edit" onclick="markDebtPaid('${debt.id}')" title="Ödendi olarak işaretle"><i class="fas fa-check"></i></button>` : ''}
           <button class="btn-icon edit" onclick="editItem('debts', '${debt.id}')"><i class="fas fa-edit"></i></button>
@@ -3184,11 +3260,11 @@
 
   function updateWalletUI() {
     const expenses = (groupData && groupData.expenses) || [];
-    const total = expenses.reduce((s, e) => s + (e.type === 'gelir' ? e.amount : -e.amount), 0);
+    const total = expenses.reduce((s, e) => s + (e.type === 'gelir' ? (Number(e.amount) || 0) : -(Number(e.amount) || 0)), 0);
     document.getElementById('walletAmount').textContent = total.toLocaleString('tr-TR');
     document.getElementById('memberCount').textContent = Object.keys(friendships).length + 1;
-    const income = expenses.filter(e => e.type === 'gelir').reduce((s, e) => s + e.amount, 0);
-    const expense = expenses.filter(e => e.type === 'gider').reduce((s, e) => s + e.amount, 0);
+    const income = expenses.filter(e => e.type === 'gelir').reduce((s, e) => s + (Number(e.amount) || 0), 0);
+    const expense = expenses.filter(e => e.type === 'gider').reduce((s, e) => s + (Number(e.amount) || 0), 0);
     document.getElementById('totalIncome').textContent = income.toLocaleString('tr-TR');
     document.getElementById('totalExpense').textContent = expense.toLocaleString('tr-TR');
     document.getElementById('transactionCount').textContent = expenses.length;
@@ -3261,8 +3337,10 @@
       return;
     }
     container.innerHTML = funds.map(fund => {
-      const progress = Math.min(100, (fund.current / fund.target) * 100);
-      const remaining = Math.max(0, fund.target - fund.current);
+      const target = Number(fund.target) || 0;
+      const current = Number(fund.current) || 0;
+      const progress = target > 0 ? Math.min(100, (current / target) * 100) : 0;
+      const remaining = Math.max(0, target - current);
       return `
         <div class="card" onclick="showDetail('giftfunds','${fund.id}')">
           <div class="flex-between">
@@ -3899,13 +3977,14 @@
         title.innerHTML = existingItem ? '<i class="fas fa-edit text-accent"></i> Oyuncuyu Düzenle' : '<i class="fas fa-plus-circle text-accent"></i> Yeni Oyuncu Ekle';
         html = `
           <label>İsim</label><input id="lb_name" value="${escapeHtml(val('name'))}" placeholder="Ahmet" />
-          <label>Puan</label><input id="lb_score" type="text" value="${escapeHtml(val('score'))}" placeholder="2450" />
+          <label>Puan</label><input id="lb_score" type="number" inputmode="numeric" min="0" value="${escapeHtml(val('score'))}" placeholder="2450" />
           <label>Avatar</label><input id="lb_avatar" value="${escapeHtml(val('avatar'))}" maxlength="2" placeholder="A" />
         `;
         saveHandler = () => {
           const name = document.getElementById('lb_name').value.trim();
-          const score = Number(document.getElementById('lb_score').value);
-          if (!name || !score) return showToast('İsim ve puan gerekli', 'fa-exclamation-circle');
+          let score = Number(document.getElementById('lb_score').value);
+          if (!name) return showToast('İsim gerekli', 'fa-exclamation-circle');
+          if (!isFinite(score) || score < 0) score = 0;
           const obj = { name, score, avatar: document.getElementById('lb_avatar').value || name[0] };
           if (existingItem) { Object.assign(existingItem, obj); obj.updatedAt = new Date().toISOString(); saveGroupData(); }
           else { obj.id = generateId(); obj.createdBy = getDisplayName(); obj.createdAt = new Date().toISOString(); addToGroup('leaderboard', obj); }
@@ -3916,7 +3995,7 @@
         title.innerHTML = existingItem ? '<i class="fas fa-edit text-accent"></i> İşlemi Düzenle' : '<i class="fas fa-plus-circle text-accent"></i> Yeni İşlem Ekle';
         html = `
           <label>Açıklama</label><input id="e_title" value="${escapeHtml(val('title'))}" placeholder="Halı Saha" />
-          <label>Tutar</label><input id="e_amount" type="text" value="${escapeHtml(val('amount'))}" placeholder="400" />
+          <label>Tutar</label><input id="e_amount" type="number" inputmode="decimal" min="0" step="0.01" value="${escapeHtml(val('amount'))}" placeholder="400" />
           <label>Tür</label>
           <select id="e_type"><option value="gider" ${val('type')==='gider'?'selected':''}>Gider</option><option value="gelir" ${val('type')==='gelir'?'selected':''}>Gelir</option></select>
           <label>Ödeyen</label><input id="e_payer" value="${escapeHtml(val('payer'))}" placeholder="Ahmet" />
@@ -3924,8 +4003,8 @@
         `;
         saveHandler = () => {
           const title = document.getElementById('e_title').value.trim();
-          const amount = Number(document.getElementById('e_amount').value);
-          if (!title || !amount) return showToast('Açıklama ve tutar gerekli', 'fa-exclamation-circle');
+          let amount = Number(document.getElementById('e_amount').value);
+          if (!title || !isFinite(amount) || amount <= 0) return showToast('Açıklama ve geçerli bir tutar gerekli', 'fa-exclamation-circle');
           const obj = { title, amount, type: document.getElementById('e_type').value, payer: document.getElementById('e_payer').value || 'Grup', members: document.getElementById('e_members').value || 1 };
           if (existingItem) { Object.assign(existingItem, obj); obj.updatedAt = new Date().toISOString(); saveGroupData(); }
           else { obj.id = generateId(); obj.createdBy = getDisplayName(); obj.createdAt = new Date().toISOString(); addToGroup('expenses', obj); }
@@ -3936,22 +4015,44 @@
         title.innerHTML = existingItem ? '<i class="fas fa-edit text-accent"></i> Borcu Düzenle' : '<i class="fas fa-plus-circle text-accent"></i> Yeni Borç Ekle';
         const debtNames = (groupData && groupData.leaderboard) || [];
         const debtNameList = debtNames.map(p => p.name);
+        const debtSelectOptions = debtNameList.length ? debtNameList.map(n => `<option value="${escapeHtml(n)}" ${val('from')===n?'selected':''}>${escapeHtml(n)}</option>`).join('') : '<option value="">Manuel yaz...</option>';
+        const debtSelectOptionsTo = debtNameList.length ? debtNameList.map(n => `<option value="${escapeHtml(n)}" ${val('to')===n?'selected':''}>${escapeHtml(n)}</option>`).join('') : '<option value="">Manuel yaz...</option>';
         html = `
           <label>Borçlu</label>
-          <select id="d_from">${debtNameList.map(n => `<option value="${escapeHtml(n)}" ${val('from')===n?'selected':''}>${escapeHtml(n)}</option>`).join('')}</select>
+          <select id="d_from"><option value="">Kişi seç...</option>${debtSelectOptions}</select>
+          <input id="d_from_custom" type="text" placeholder="Veya isim yaz..." maxlength="30" style="display:none;" />
           <label>Alacaklı</label>
-          <select id="d_to">${debtNameList.map(n => `<option value="${escapeHtml(n)}" ${val('to')===n?'selected':''}>${escapeHtml(n)}</option>`).join('')}</select>
-          <label>Tutar</label><input id="d_amount" type="text" value="${escapeHtml(val('amount'))}" placeholder="200" />
+          <select id="d_to"><option value="">Kişi seç...</option>${debtSelectOptionsTo}</select>
+          <input id="d_to_custom" type="text" placeholder="Veya isim yaz..." maxlength="30" style="display:none;" />
+          <label>Tutar</label><input id="d_amount" type="number" inputmode="decimal" min="0" step="0.01" value="${escapeHtml(val('amount'))}" placeholder="200" />
           <label>Sebep</label><input id="d_reason" value="${escapeHtml(val('reason'))}" placeholder="Halı saha masrafı" />
           <label>Durum</label>
           <select id="d_status"><option value="Bekliyor" ${val('status')==='Bekliyor'?'selected':''}>Bekliyor</option><option value="Ödendi" ${val('status')==='Ödendi'?'selected':''}>Ödendi</option></select>
         `;
+        // Manuel isim girişi kontrollerini select'e bağla
+        setTimeout(() => {
+          const fromSel = document.getElementById('d_from');
+          const toSel = document.getElementById('d_to');
+          const fromCustom = document.getElementById('d_from_custom');
+          const toCustom = document.getElementById('d_to_custom');
+          const toggle = (sel, custom) => {
+            if (sel && custom) {
+              const existing = sel.value !== '';
+              custom.style.display = existing ? 'none' : 'block';
+              // Düzenlerken listede olmayan mevcut değeri manuel alana taşı
+              if (!existing && val(sel.id === 'd_from' ? 'from' : 'to')) custom.value = val(sel.id === 'd_from' ? 'from' : 'to');
+            }
+          };
+          if (fromSel && fromCustom) { fromSel.addEventListener('change', () => toggle(fromSel, fromCustom)); toggle(fromSel, fromCustom); }
+          if (toSel && toCustom) { toSel.addEventListener('change', () => toggle(toSel, toCustom)); toggle(toSel, toCustom); }
+        }, 50);
         saveHandler = () => {
-          const from = document.getElementById('d_from').value;
-          const to = document.getElementById('d_to').value;
+          const from = document.getElementById('d_from').value || (document.getElementById('d_from_custom')?.value || '').trim();
+          const to = document.getElementById('d_to').value || (document.getElementById('d_to_custom')?.value || '').trim();
           const amount = Number(document.getElementById('d_amount').value);
-          if (from === to) return showToast('Borçlu ve alacaklı aynı olamaz', 'fa-exclamation-circle');
-          if (!amount) return showToast('Tutar gerekli', 'fa-exclamation-circle');
+          if (!from || !to) return showToast('Borçlu ve alacaklı gerekli', 'fa-exclamation-circle');
+          if (from.toLowerCase('tr-TR').trim() === to.toLowerCase('tr-TR').trim()) return showToast('Borçlu ve alacaklı aynı olamaz', 'fa-exclamation-circle');
+          if (!isFinite(amount) || amount <= 0) return showToast('Geçerli bir tutar girin', 'fa-exclamation-circle');
           const obj = { from, to, amount, reason: document.getElementById('d_reason').value || '', status: document.getElementById('d_status').value };
           if (existingItem) { Object.assign(existingItem, obj); obj.updatedAt = new Date().toISOString(); saveGroupData(); }
           else { obj.id = generateId(); obj.createdBy = getDisplayName(); obj.createdAt = new Date().toISOString(); addToGroup('debts', obj); }
@@ -3962,7 +4063,7 @@
         title.innerHTML = existingItem ? '<i class="fas fa-edit text-accent"></i> Aboneliği Düzenle' : '<i class="fas fa-plus-circle text-accent"></i> Abonelik Ekle';
         html = `
           <label>Abonelik Adı</label><input id="s_name" value="${escapeHtml(val('name'))}" placeholder="Netflix" />
-          <label>Ücret</label><input id="s_amount" type="text" value="${escapeHtml(val('amount'))}" placeholder="30" />
+          <label>Ücret</label><input id="s_amount" type="number" inputmode="decimal" min="0" step="0.01" value="${escapeHtml(val('amount'))}" placeholder="30" />
           <label>Sıradaki</label><input id="s_next" value="${escapeHtml(val('next'))}" placeholder="Can" />
           <label>Durum</label>
           <select id="s_status"><option value="Aktif" ${val('status')==='Aktif'?'selected':''}>Aktif</option><option value="Pasif" ${val('status')==='Pasif'?'selected':''}>Pasif</option></select>
@@ -4199,7 +4300,7 @@
   // ================================================================
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js?v=3')
+      navigator.serviceWorker.register('/sw.js?v=4')
         .then(reg => {
           console.log('[DostOS] Service Worker kayıtlı:', reg.scope);
           // Yeni SW'yi hemen aktifleştir
