@@ -11,6 +11,12 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="DostOS" />
+  <!-- iOS tam ekran & biçim algılama -->
+  <meta name="format-detection" content="telephone=no, date=no" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, shrink-to-fit=no" />
+  <link rel="apple-touch-icon-precomposed" href="icons/app-192x192.png" />
   <link rel="icon" href="favicon.ico?v=2" sizes="32x32" />
   <link rel="apple-touch-icon" href="icons/app-192x192.png" />
   <link rel="apple-touch-icon" sizes="152x152" href="icons/app-152x152.png" />
@@ -88,6 +94,24 @@
       content:''; position:fixed; left:0; right:0; bottom:0;
       width:100%; height:var(--safe-bottom, 0px);
       background:#070b14; z-index:1; pointer-events:none;
+    }
+    /* Home indicator (alt çubuk) bölgesini kesin olarak kapat:
+       safe-area değeri hiç hesaplanmasa bile en az 34px koyu alan garantisi */
+    @supports (-webkit-touch-callout: none) {
+      body::after {
+        height:max(env(safe-area-inset-bottom, 34px), 34px);
+        background:#070b14;
+      }
+      .bottom-nav {
+        padding-bottom:max(env(safe-area-inset-bottom, 0px), 0px);
+      }
+    }
+    /* Standalone modda body arka planı home indicator bölgesini de kaplasın */
+    @media screen and (display-mode: standalone) {
+      body::after {
+        height:max(env(safe-area-inset-bottom, 34px), 34px);
+        background:#070b14 !important;
+      }
     }
     input, select, textarea, button {
       user-select: text !important;
@@ -589,8 +613,8 @@
       position:fixed; bottom:0;
       left:10px; right:10px;
       width:calc(100% - 20px);
-      height:calc(var(--nav-height) + var(--safe-bottom));
-      padding-bottom:var(--safe-bottom); padding:0 0 var(--safe-bottom);
+      height:calc(var(--nav-height) + max(var(--safe-bottom), 0px));
+      padding:0 0 max(var(--safe-bottom), 0px);
       /* iOS home indicator desteği */
       padding-top:8px;
       background: linear-gradient(0deg, rgba(7,11,20,0.98) 0%, rgba(7,11,20,0.85) 100%);
@@ -956,7 +980,7 @@
       }
       .fab {
         position:fixed !important;
-        bottom:calc(var(--nav-height) + 20px + var(--safe-bottom)) !important;
+        bottom:calc(var(--nav-height) + 20px + max(var(--safe-bottom), 0px)) !important;
         left:50% !important;
         transform:translateX(-50%) !important;
       }
@@ -965,7 +989,7 @@
 
     /* ==================== RESPONSIVE FIXES ==================== */
     @media (max-width:480px) {
-      .main-content { padding:0 14px calc(var(--nav-height) + var(--safe-bottom) + 16px); }
+      .main-content { padding:0 14px calc(var(--nav-height) + max(var(--safe-bottom), 0px) + 16px); }
       .app-header { padding:12px 10px 10px; }
       .app-header .brand span { font-size:18px; }
       .app-header .header-actions .action-btn { width:34px; height:34px; font-size:13px; }
